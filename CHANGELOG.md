@@ -28,6 +28,8 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   store sesi di mode teks, TUI, dan RPC tidak lagi menjalankan fs sinkron di dalam future (§4).
 
 ### Added
+- **Wizard setup awal (first-run)**: tanpa kunci → pilih provider → kunci tersembunyi
+  → keyring → discovery model → config tertulis; jalan di Windows/Linux.
 - **Sistem GitHub**: workflow CI (matriks Linux+Windows, gerbang penuh) + Release
   otomatis dari tag v* (build 3 platform + catatan dari CHANGELOG) + LICENSE
   MIT + CONTRIBUTING + SECURITY + panduan setup.
