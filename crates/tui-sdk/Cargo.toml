@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "SDK embedding Rust untuk sesi agent mx (permukaan publik yang stabil)"
+description = "SDK embedding Rust untuk sesi agent maicli (permukaan publik yang stabil)"
 
 [dependencies]
 tui-approval.workspace = true

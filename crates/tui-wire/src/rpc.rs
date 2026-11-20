@@ -1,4 +1,4 @@
-//! Protokol RPC baris-per-baris (`mx --mode rpc`).
+//! Protokol RPC baris-per-baris (`maicli --mode rpc`).
 //!
 //! Klien menulis satu objek JSON per baris ke stdin; server menulis satu objek
 //! JSON per baris ke stdout. Protokol ini stabil untuk otomasi, jadi event
@@ -16,7 +16,7 @@ use crate::event::{AgentEvent, ProviderEvent};
 use crate::message::StopReason;
 
 /// Versi protokol yang diumumkan di frame `ready`.
-pub const PROTOCOL_VERSION: &str = "mx-rpc/1";
+pub const PROTOCOL_VERSION: &str = "maicli-rpc/1";
 
 /// Versi protokol yang didukung server: v1 (default) dan v2 (chunk).
 pub const SUPPORTED_PROTOCOL_VERSIONS: [u32; 2] = [1, 2];

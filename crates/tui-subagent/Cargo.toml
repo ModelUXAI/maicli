@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Subagent lokal (agent anak) untuk mx: tool `subagent` + runner sesi anak"
+description = "Subagent lokal (agent anak) untuk maicli: tool `subagent` + runner sesi anak"
 
 [dependencies]
 tui-approval.workspace = true

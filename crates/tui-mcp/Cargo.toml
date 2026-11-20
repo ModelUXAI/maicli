@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Klien MCP (Model Context Protocol) transport stdio + bridge tool untuk mx"
+description = "Klien MCP (Model Context Protocol) transport stdio + bridge tool untuk maicli"
 
 [dependencies]
 tui-tools.workspace = true

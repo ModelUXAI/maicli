@@ -142,7 +142,7 @@ mod tests {
     use super::*;
 
     fn siapkan(nama: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-skills-{}-{nama}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-skills-{}-{nama}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("uji-baca")).unwrap();
         std::fs::write(

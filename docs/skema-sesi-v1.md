@@ -11,7 +11,7 @@ bukan edit diam-diam.
   saat proses mati mendadak.
 
 ```json
-{"type":"session","version":1,"id":"18f2a…-0","title":"sesi mx","created_at":1763…,"cwd":"C:\\kerja"}
+{"type":"session","version":1,"id":"18f2a…-0","title":"sesi maicli","created_at":1763…,"cwd":"C:\\kerja"}
 {"type":"session_init","id":"18f2a…-1","timestamp":1763…,"cwd":"C:\\kerja","app_version":"0.1.0"}
 {"type":"message","id":"18f2a…-2","parent_id":null,"timestamp":1763…,"message":{"role":"user","content":"halo"}}
 ```
@@ -69,7 +69,7 @@ mengulang pekerjaan ringkasan yang sudah dibayar.
 
 `list(dir)` mengembalikan ringkasan terbaru lebih dulu (urut `updated_at`, lalu id sebagai
 pemecah seri); file yang tidak bisa diparse dilewati supaya satu file korup tidak menyembunyikan
-sesi lain. `latest(dir)` = elemen pertama daftar itu, dipakai `mx --resume` tanpa id.
+sesi lain. `latest(dir)` = elemen pertama daftar itu, dipakai `maicli --resume` tanpa id.
 
 ## Tulis atomik
 

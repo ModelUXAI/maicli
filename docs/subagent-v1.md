@@ -118,11 +118,11 @@ terbaca), `abort_turn_berjalan_menghasilkan_status_aborted`.
 
 ## ACP transport (subagent D, 2026-11-20)
 
-- `mx --mode acp`: agen sebagai **server ACP** di stdin/stdout (JSON-RPC 2.0
+- `maicli --mode acp`: agen sebagai **server ACP** di stdin/stdout (JSON-RPC 2.0
   line-delimited) — host eksternal (Zed dsb.) **dan lokal** (pipe) mengendalikan;
 - Metode: `initialize`, `session/new`, `session/prompt` (blok teks; selama turn mengalir
   notifikasi `session/update`), `session/cancel` (cancel token — tidak menunggu lock);
 - Multi-sesi: HashMap slot (ownership pindah ke task turn, dikembalikan setelah selesai —
   konteks utuh antar prompt);
-- E2E: proses `mx` anak dikendalikan host nyata — initialize/new/prompt/update/
+- E2E: proses `maicli` anak dikendalikan host nyata — initialize/new/prompt/update/
   end_turn/cancel/tak dikenal — semua hijau.

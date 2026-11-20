@@ -1,4 +1,4 @@
-# Protokol RPC v2 (`mx --mode rpc`) — transport chunk
+# Protokol RPC v2 (`maicli --mode rpc`) — transport chunk
 
 Status: **DONE (transport + prompt_result/settled)** — negosiasi versi, chunking frame besar, dan semantik akhir prompt. Fitur
 protokol lanjutan yang belum ada (extension UI, subagent, sesi/queue) tercatat
@@ -15,7 +15,7 @@ Server mengumumkan dukungannya di frame `ready`:
 ```json
 {
   "type": "ready",
-  "protocol": "mx-rpc/1",
+  "protocol": "maicli-rpc/1",
   "model": "…",
   "supported_protocol_versions": [1, 2],
   "max_reassembled_frame_bytes": 67108864

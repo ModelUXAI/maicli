@@ -214,7 +214,7 @@ mod tests {
 
     fn grant_file(name: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("mx-approval-ttl-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("maicli-approval-ttl-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("dir");
         dir.join("grants.json")

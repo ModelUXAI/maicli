@@ -1,6 +1,6 @@
 <div align="center">
 
-# ModeluXAI TUI — `mx`
+# ModeluXAI TUI — `maicli`
 
 **Agen AI untuk terminal.** Multi-provider, jalan di Windows, Linux, dan
 macOS. Satu biner Rust; tidak butuh runtime Node.
@@ -11,7 +11,7 @@ macOS. Satu biner Rust; tidak butuh runtime Node.
 
 </div>
 
-`mx` adalah agen pemrograman yang bekerja di terminal. Kamu memberi tugas, ia
+`maicli` adalah agen pemrograman yang bekerja di terminal. Kamu memberi tugas, ia
 membaca dan menulis kode, menjalankan perintah, lalu melapor. Setiap akses
 berkas dan eksekusi melewati approval gate yang bisa kamu atur.
 
@@ -44,7 +44,7 @@ A. Unduh dari [Releases](../../releases):
 
 ```bash
 # Linux x64
-tar -xzf mx-v0.1.0-linux-x64.tar.gz && sudo mv mx /usr/local/bin/
+tar -xzf maicli-v0.1.0-linux-x64.tar.gz && sudo mv maicli /usr/local/bin/
 ```
 
 B. Atau build dari sumber (butuh Rust stable):
@@ -56,15 +56,15 @@ cargo install --path crates/tui-app
 ## Mulai cepat
 
 ```bash
-mx                  # pertama kali: wizard setup
+maicli                  # pertama kali: wizard setup
 # ikuti langkahnya: pilih provider, isi kunci, pilih model
 
-mx                  # TUI penuh
-mx --mode text      # REPL teks (untuk SSH)
-mx --prompt "ringkas README ini" --mode text   # satu prompt, lalu keluar
-mx --mode serve     # API lokal: /api/health, /api/prompt, /api/events/stream
-mx --mode relay     # bagikan sesi via WebSocket (control/guest)
-mx --mode acp       # kendalikan dari host eksternal (Zed dsb.)
+maicli                  # TUI penuh
+maicli --mode text      # REPL teks (untuk SSH)
+maicli --prompt "ringkas README ini" --mode text   # satu prompt, lalu keluar
+maicli --mode serve     # API lokal: /api/health, /api/prompt, /api/events/stream
+maicli --mode relay     # bagikan sesi via WebSocket (control/guest)
+maicli --mode acp       # kendalikan dari host eksternal (Zed dsb.)
 ```
 
 Perintah di dalam TUI: `/model`, `/provider add`, `/catalog`, `/compact`,
@@ -86,7 +86,7 @@ tui-subagent  manager + orchestrator (A–D)
 tui-katalog   kompilator katalog KDL omp
 tui-core      sesi agent (turn, tools, hooks)
 tui-sdk       embedding Rust (SessionBuilder, AgentRegistry)
-tui-app       biner `mx` (TUI/text/rpc/serve/relay/acp)
+tui-app       biner `maicli` (TUI/text/rpc/serve/relay/acp)
 ```
 
 ## Kontribusi

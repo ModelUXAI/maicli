@@ -19,7 +19,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   idle, sesuai kriteria C-08/C-09.
 - Normalisasi parity kini ikut membandingkan **stop reason** (`message_end:ok:stop|tooluse|length|…`),
   supaya skenario `length`/`toolUse` tidak lagi terlihat identik dengan jawaban biasa.
-- `mx config show` menyebut **sumber** kunci API (`env`, `keyring`, atau `tidak ada`) alih-alih
+- `maicli config show` menyebut **sumber** kunci API (`env`, `keyring`, atau `tidak ada`) alih-alih
   selalu menulis "environment", tanpa pernah menampilkan nilainya.
 - Seluruh penulisan entry sesi (pesan, compaction, approval, usage, judul, model) dipindah ke
   `spawn_blocking` lewat `session_open::append`, sehingga tidak ada lagi fs sinkron di jalur async —
@@ -33,7 +33,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 - **Sistem GitHub**: workflow CI (matriks Linux+Windows, gerbang penuh) + Release
   otomatis dari tag v* (build 3 platform + catatan dari CHANGELOG) + LICENSE
   MIT + CONTRIBUTING + SECURITY + panduan setup.
-- **Packaging Linux x64**: `mx-0.1.0-linux-x64.tar.gz` (release + strip, 3,8 MB).
+- **Packaging Linux x64**: `maicli-0.1.0-linux-x64.tar.gz` (release + strip, 3,8 MB).
 - **kill-tree POSIX**: child = leader proses group (`process_group(0)`) + `kill -9 -- -pgid`
   (tanpa unsafe); test pohon 2 level di Linux nyata.
 - **Keyring Linux** (Secret Service) + **UI interaktif**: `/model` picker,
@@ -41,7 +41,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   kredensial tetap env-only).
 - **Verifikasi Linux native**: `check.sh` SEMUA GERBANG HIJAU di server iqbal
   (x86_64; 501 test + 9 E2E); \cl_restricted\ POSIX kini memeriksa mode 600;
-- **ACP transport (subagent D)**: `mx --mode acp` — agen sebagai server ACP
+- **ACP transport (subagent D)**: `maicli --mode acp` — agen sebagai server ACP
   (JSON-RPC line-delimited stdio) untuk host eksternal dan lokal; multi-sesi + cancel.
 - **Extensions (v1)**: loader extension eksternal — folder + manifest `extension.json`
   ketat; tool proses dengan env dibersihkan + approval Exec + nama `ext.<ext>.<tool>`;
@@ -52,7 +52,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   command interaktif `/catalog` (picker provider + validasi model bawaan + hint env).
 - **Agent Hub v2**: transkrip asisten anak (toggle `[t]`) + broadcast steer ke semua
   anak berjalan (`[b]`).
-- **`mx serve` `GET /api/subagents`**: daftar subagent (status/turns) lewat HTTP API.
+- **`maicli serve` `GET /api/subagents`**: daftar subagent (status/turns) lewat HTTP API.
 - **RPC `replay_spool`** (v2): klien menarik ulang frame yang tertahan di spool.
 - **RPC `subagent_list`** (v2): klien memantau daftar subagent (status/turns/tool_calls);
   tool `subagent` kini aktif di mode RPC.
@@ -86,11 +86,11 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   berhenti sendiri (idle-timeout 3×2 dtk) + abort saat keluar — anti-deadlock.
 - **SSE push `GET /api/events/stream`**: tamu menerima event riwayat realtime (Last-Event-ID,
   koneksi ditahan sampai putus).
-- **Token serve otomatis**: `MX_SERVE_TOKEN` env atau token acak di `<data>/serve-token` (0600/ACL)
+- **Token serve otomatis**: `MAICLI_SERVE_TOKEN` env atau token acak di `<data>/serve-token` (0600/ACL)
   — server HTTP lokal tidak pernah berjalan tanpa otentikasi.
 - **Session tree**: `tui_session::pohon` (relasi fork dari header) + perintah **`/tree`**
   di mode teks dan TUI (indentasi per kedalaman cabang).
-- **Skills v1**: folder `skills/<nama>/SKILL.md` (+`MX_SKILLS_DIR`) — daftar disuntik ke system prompt,
+- **Skills v1**: folder `skills/<nama>/SKILL.md` (+`MAICLI_SKILLS_DIR`) — daftar disuntik ke system prompt,
   tool `skill` membaca isi (tier Read).
 - **Serve stateful**: transkrip+usage tersimpan antar request; `GET /api/session` (metadata),
   `POST /api/abort` (cancel token turn aktif); prompt saat sibuk → 409.
@@ -103,9 +103,9 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   105 berkas) + auth (108) ter-parse dan terverifikasi terhadap katalog nyata.
 - **Collab v1 (polling)**: `GET /api/events` — tamu memantau riwayat event sesi server
   (prompt/jawab/turn/tool/notice, 1000 terakhir). WebSocket relay penuh menyusul (butuh dependensi WS).
-- **API server lokal**: `mx --mode serve --port` — HTTP/1.1 minimal di loopback (tanpa dependensi baru):
+- **API server lokal**: `maicli --mode serve --port` — HTTP/1.1 minimal di loopback (tanpa dependensi baru):
   `GET /api/health`, `POST /api/prompt` (satu turn penuh), `GET /api/sessions`; auth opsional Bearer
-  via `MX_SERVE_TOKEN`; tool tier manusia ditolak otomatis di server tanpa UI.
+  via `MAICLI_SERVE_TOKEN`; tool tier manusia ditolak otomatis di server tanpa UI.
 - **RPC extension UI sub-protocol (v2)**: `set_ui_extension` — klien melanggani event sesi
   (`turn.start`/`turn.end`/`tool.start`/`tool.end`) dan menerima frame `ui_extension`.
 - **MCP auth header + retry**: `mcp.servers.x.headers` (nilai `env:NAMA`; tidak pernah dicatat log),
@@ -127,7 +127,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 - **Registry provider** (`tui-wire::providers`): **ModeluXAI** (bawaan, `https://api.modeluxai.com/v1`,
   kunci `MODELUXAI_API_KEY`) + 45 provider katalog omp (OpenAI, OpenRouter, DeepSeek, zAI/GLM, Groq,
   Moonshot, xAI, Mistral, Together, Fireworks, Cerebras, Gemini, Ollama/LM Studio/vLLM lokal, dll.).
-  Pengguna cukup memasukkan **API key** (env var atau keyring lewat `mx config key-import`). Command
+  Pengguna cukup memasukkan **API key** (env var atau keyring lewat `maicli config key-import`). Command
   baru **`/provider`**: daftar provider dan ganti provider aktif (menulis config global; restart
   diperlukan sesuai kebijakan v1).
 - **Subagent lokal tahap A (`tui-subagent`)**: tool `subagent` yang menjalankan sesi anak terisolasi
@@ -190,25 +190,25 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 - `check.sh`: padanan POSIX `check.ps1` (fmt/clippy/test/deny + aturan dependensi), memenuhi C-01;
   belum dieksekusi di mesin ini karena Windows tanpa bash/WSL — dicatat apa adanya di `WORK.md`.
 - Test **E2E redaksi kunci**: binary dijalankan dengan `MODELUXAI_API_KEY` palsu, lalu seluruh berkas di
-  `MX_DATA_DIR` (sesi, log, cache) dipindai — tidak ada yang memuat kunci (C-06 kriteria 5).
+  `MAICLI_DATA_DIR` (sesi, log, cache) dipindai — tidak ada yang memuat kunci (C-06 kriteria 5).
 - Test **E2E approval mode teks lewat stdin**: tool `write` diminta model, prompt `[persetujuan]` dengan
   **argumen verbatim** tampil, jawaban `y` di stdin membuat tool berjalan dan berkas hasil tertulis.
-- Override direktori data **`MX_DATA_DIR`** (portable/test): memindahkan config, sesi, log, dan cache
+- Override direktori data **`MAICLI_DATA_DIR`** (portable/test): memindahkan config, sesi, log, dan cache
   tanpa menyentuh profil pengguna; dipakai test E2E agar benar-benar terisolasi.
-- Test **E2E crash di tengah turn**: proses `mx` dibunuh saat streaming menggantung; berkas sesi yang
+- Test **E2E crash di tengah turn**: proses `maicli` dibunuh saat streaming menggantung; berkas sesi yang
   sudah ditulis tetap bisa dibaca (`SessionStore::load`), header utuh, pesan pengguna bertahan.
 - `--event-log` kini **di-flush sebelum proses keluar** (`event_log::flush`), sehingga transkrip lengkap
   dan deterministik.
-- Test **E2E mode RPC + approval**: binary `mx --mode rpc` melawan gateway tiruan, model meminta tool
+- Test **E2E mode RPC + approval**: binary `maicli --mode rpc` melawan gateway tiruan, model meminta tool
   `write`, klien membalas frame `approval_request` dengan `once` → tool berjalan, berkas hasil berisi
   data mock, `result.stop_reason=stop`, lalu `shutdown` menutup server dengan exit 0.
-- Test **E2E tanpa gateway nyata** (`crates/tui-app/tests/e2e_mock_gateway.rs`): binary `mx` dijalankan
-  mode teks melawan server HTTP tiruan (SSE + `/models`) dengan kunci palsu dan `MX_DATA_DIR` terisolasi;
+- Test **E2E tanpa gateway nyata** (`crates/tui-app/tests/e2e_mock_gateway.rs`): binary `maicli` dijalankan
+  mode teks melawan server HTTP tiruan (SSE + `/models`) dengan kunci palsu dan `MAICLI_DATA_DIR` terisolasi;
   memverifikasi stdout jawaban, exit 0, dan transkrip `--event-log` berisi `AgentStart`/`AgentEnd`.
 - Perekam transkrip `--event-log <FILE>` (RENCANA C-12): setiap `AgentEvent` yang mengalir ke UI juga
   ditulis sebagai JSONL (direktori dibuat otomatis, kegagalan menulis tidak menggagalkan sesi), di mode
-  TUI/teks/RPC; dipasangkan dengan runner `mx --parity-expected/--parity-actual`.
-- Runner parity (RENCANA C-12): `mx --parity-expected <ACUAN.jsonl> --parity-actual <HASIL.jsonl>` membaca
+  TUI/teks/RPC; dipasangkan dengan runner `maicli --parity-expected/--parity-actual`.
+- Runner parity (RENCANA C-12): `maicli --parity-expected <ACUAN.jsonl> --parity-actual <HASIL.jsonl>` membaca
   dua transkrip event agen, menormalisasi keduanya, mencetak laporan diff (skenario, indeks event pertama
   berbeda, event hilang/kelebihan), dan exit 1 bila berbeda. `AgentEvent`/`ProviderEvent` kini
   serializable agar transkrip bisa disimpan dan dibandingkan.
@@ -262,16 +262,16 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   berbeda, dan daftar event hilang/kelebihan — laporan diff, bukan sekadar “gagal”.
 - Test integrasi worker: prompt yang dikirim **saat turn sibuk** ditolak dengan notice “masih sibuk”
   (server SSE lambat tiruan), membuktikan C-03(4) di tingkat produk, bukan hanya core.
-- Hapus sesi (`dropSession`, RENCANA C-06): `mx --drop-session <id>` menghapus berkas sesi dan
+- Hapus sesi (`dropSession`, RENCANA C-06): `maicli --drop-session <id>` menghapus berkas sesi dan
   artefak lock-nya; menolak sesi yang sedang dipakai proses lain (`E_SESSION_LOCKED`) dan melaporkan
   sesi tak ada (`E_SESSION_NOT_FOUND`). Operasi destruktif hanya lewat flag eksplisit, tidak otomatis.
 - Pencarian judul sesi (RENCANA C-06): `tui_session::search` (substring, tanpa peduli huruf besar),
-  `/sessions <judul>` di aplikasi, dan `mx --list-sessions [judul]` di CLI.
+  `/sessions <judul>` di aplikasi, dan `maicli --list-sessions [judul]` di CLI.
 - Approval di mode teks kini menampilkan **argumen verbatim** (tidak hanya subjek) dan batas waktu
   keputusan, sehingga pengguna tidak menyetujui tool tanpa melihat apa yang akan dijalankan.
 - `docs/uat-v1.md`: paket UAT U-01..U-12 (langkah, hasil yang diharapkan, kolom hasil untuk
   iqbal) sesuai RENCANA §11.3, termasuk prosedur log untuk bukti performa.
-- Instrumentasi pengukuran C-09: dengan MX_LOG=debug, TUI mencatat frame_ms per frame dan
+- Instrumentasi pengukuran C-09: dengan MAICLI_LOG=debug, TUI mencatat frame_ms per frame dan
   delta_ms (dari delta streaming diterima sampai digambar) ke berkas log; `logging::init_with`
   ditambahkan agar jalur ini bisa diuji (log benar-benar tertulis ke berkas).
 - Test regresi C-05: seluruh 8 tool v1 dicoba dengan approver Deny — setiap panggilan berhenti di
@@ -279,7 +279,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 - Berkas sesi punya **batas ukuran 16 MiB + rotasi**: saat batas tercapai, sesi lanjut di berkas baru
   dengan `parent_session` menunjuk berkas sebelumnya (berkas lama utuh), sehingga log tidak tumbuh
   tanpa batas (RENCANA C-06).
-- Override config **runtime** lewat `mx --set bagian.kunci=nilai` (boleh diulang): prioritas tertinggi,
+- Override config **runtime** lewat `maicli --set bagian.kunci=nilai` (boleh diulang): prioritas tertinggi,
   tidak menulis file, nilai divalidasi dulu, dan ditandai `<runtime --set>` di `config show`.
 - `docs/config-v1.md`: skema config v1 (semua bagian/kunci/default), urutan pencarian kunci API,
   dan catatan bahwa perubahan config **butuh restart** (tanpa file-watching) sesuai C-11.
@@ -348,12 +348,12 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 - TUI punya **pemilih sesi**: `/sessions` membuka overlay berisi sesi terbaru (judul + jumlah
   pesan), `↑`/`↓`/`j`/`k` memilih, `Enter` langsung pindah sesi, `Esc` menutup tanpa efek; daftar
   kosong tetap menjadi pesan biasa. Event baru `SessionsListed` membawa daftar itu ke UI.
-- `mx --fork [ID]` membuat salinan sesi (judul "… (fork)", `parent_session` terisi) lalu melanjutkan
+- `maicli --fork [ID]` membuat salinan sesi (judul "… (fork)", `parent_session` terisi) lalu melanjutkan
   salinannya; `--resume` dan `--fork` tidak boleh dipakai bersamaan.
 - `/usage` merinci pemakaian **per model** bila sesi memakai lebih dari satu model (termasuk setelah
   `/model` berganti), dihitung dari akumulasi per model di `AgentSession`.
 - Kunci API bisa dibaca dari keyring OS: env var tetap prioritas, keyring jadi cadangan, dan
-  `mx config key-import` menyimpan nilai dari env var ke Windows Credential Manager tanpa pernah
+  `maicli config key-import` menyimpan nilai dari env var ke Windows Credential Manager tanpa pernah
   mencetaknya (pesan galat pun tidak memuat nilai kunci).
 - Entry `ModelUsage` kini ditulis setiap turn (selisih terhadap yang sudah tercatat) dan dijumlahkan
   saat resume, sehingga `/usage` melanjutkan hitungan sesi alih-alih mulai dari nol; sebelum ini
@@ -374,10 +374,10 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   dimatikan lagi saat keluar sehingga terminal tetap bersih.
 - RPC membatasi satu frame pada 1 MiB: frame lebih besar dibuang tanpa disimpan ke memori, server
   membalas `E_PROTOCOL` dan melanjutkan; galat JSON hanya memuat pratinjau 200 karakter.
-- `mx config set <key> <value>` menulis satu nilai ke config global secara atomik, mempertahankan
+- `maicli config set <key> <value>` menulis satu nilai ke config global secara atomik, mempertahankan
   key lain, dan menolak key asing atau nilai tidak valid sebelum file disentuh.
 - Slash `/sessions` menampilkan sesi tersimpan (terbaru lebih dulu) di mode teks dan TUI, memakai
-  daftar yang sama dengan `mx --list-sessions`.
+  daftar yang sama dengan `maicli --list-sessions`.
 - Mode teks sekarang bisa menjawab tool `ask`: stdin dibaca satu thread pembaca dan dibagi antara
   REPL dan pertanyaan; baris yang diketik saat turn berjalan disimpan untuk prompt berikutnya,
   bukan dibuang.
@@ -413,10 +413,10 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   berhenti di batas iterasi sebelum panggilan model berikutnya.
 - Lock sesi: file `.lock` mencegah dua proses menulis sesi yang sama (`E_SESSION_LOCKED`),
   lock basi lebih dari satu jam diambil alih otomatis.
-- Daftar dan lanjut sesi: `mx --list-sessions`, `mx --resume [ID]` (tanpa ID = sesi terakhir);
+- Daftar dan lanjut sesi: `maicli --list-sessions`, `maicli --resume [ID]` (tanpa ID = sesi terakhir);
   mode teks, TUI, dan RPC memuat pesan lama sebagai konteks awal, dan file rusak dilewati
   saat mendaftar.
-- Mode `--mode rpc`: server JSONL (`mx-rpc/1`) dengan `ping`, `prompt`, `abort`, `model`,
+- Mode `--mode rpc`: server JSONL (`maicli-rpc/1`) dengan `ping`, `prompt`, `abort`, `model`,
   `shutdown`, event terproyeksi, dan approval berbasis config tanpa UI (`docs/rpc-v1.md`).
 - Pembatalan kooperatif: `CancelToken` diteruskan ke tool; `bash` menghentikan pohon proses
   segera saat turn dibatalkan, dan turn yang sedang menunggu stream model berhenti dengan
@@ -425,7 +425,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   `model · keadaan · scroll`, dan `Esc` membatalkan turn yang berjalan.
 - Workspace Rust `TUI/` dengan sembilan crate: `tui-wire`, `tui-context`, `tui-provider`,
   `tui-session`, `tui-approval`, `tui-config`, `tui-tools`, `tui-core`, `tui-app`.
-- Binary `mx` dengan mode `tui`, mode `text`, `--prompt` sekali jalan, dan `config show|path`.
+- Binary `maicli` dengan mode `tui`, mode `text`, `--prompt` sekali jalan, dan `config show|path`.
 - Klien gateway OpenAI-compatible: pembaca SSE tahan chunk terpotong, perakitan `tool_call`
   terfragmentasi, pemetaan `finish_reason`, retry 3 percobaan dengan jitter, taksonomi error stabil.
 - Resolusi id model berlapis (persis → case-insensitive → tanpa prefiks provider → substring unik)
@@ -468,7 +468,7 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 - `bash` yang timeout/dibatalkan kini mengembalikan **output parsial** yang sudah dihasilkan (ditandai
   `[output parsial]` dan `truncated=true`), bukan hanya pesan timeout — sesuai C-04 kriteria 2. Pipe
   ditutup setelah proses dibunuh dan pembacaan dibatasi 2 detik agar turn tidak menggantung.
-- `mx config set` dengan kunci asing kini memakai pesan **“kunci config tidak dikenal: unknown field …”**
+- `maicli config set` dengan kunci asing kini memakai pesan **“kunci config tidak dikenal: unknown field …”**
   alih-alih awalan “TOML parse error” yang menyesatkan (file tetap tidak ditulis, exit 2).
 - Error provider kini tetap memasangkan event `message_start` dengan `message_end`: dibuat pesan
   sintetis ber-`stop_reason: error` (berisi alasan) sehingga UI tidak menggantung menunggu akhir pesan

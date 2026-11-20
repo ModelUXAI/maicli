@@ -57,7 +57,7 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-parity-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-parity-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("dir");
         dir

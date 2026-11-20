@@ -1,4 +1,4 @@
-//! Titik masuk binary `mx`.
+//! Titik masuk binary `maicli`.
 
 mod acp_mode;
 mod approvals;
@@ -64,7 +64,7 @@ pub struct Boot {
     pub subagents: Option<Arc<tui_subagent::manager::SubagentManager>>,
     /// Penerima notifikasi server MCP (diteruskan ke timeline oleh mode).
     pub notif_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(String, tui_mcp::McpNotification)>>,
-    /// Skill ditemukan saat boot (folder skills/ + MX_SKILLS_DIR).
+    /// Skill ditemukan saat boot (folder skills/ + MAICLI_SKILLS_DIR).
     pub skills: Vec<tui_tools::skills::Skill>,
     /// Katalog omp dimuat (flag `--catalog` / config `[catalog] path`).
     pub katalog: Option<tui_katalog::Katalog>,
@@ -166,18 +166,18 @@ async fn fork_session(
 
 /// Direktori data aplikasi (config, sesi, log).
 ///
-/// `MX_DATA_DIR` menimpa lokasi default agar instalasi portabel dan test E2E
+/// `MAICLI_DATA_DIR` menimpa lokasi default agar instalasi portabel dan test E2E
 /// bisa memakai direktori terisolasi tanpa menyentuh profil pengguna. Variabel
 /// ini tidak pernah mengubah isi peka; ia hanya memindahkan lokasi berkas.
 pub(crate) fn config_root() -> PathBuf {
-    if let Some(custom) = std::env::var_os("MX_DATA_DIR") {
+    if let Some(custom) = std::env::var_os("MAICLI_DATA_DIR") {
         if !custom.is_empty() {
             return PathBuf::from(custom);
         }
     }
     directories::BaseDirs::new()
         .map(|dirs| dirs.config_dir().join("ModeluXAI").join("TUI"))
-        .unwrap_or_else(|| PathBuf::from(".mx"))
+        .unwrap_or_else(|| PathBuf::from(".maicli"))
 }
 
 #[tokio::main]
@@ -281,7 +281,7 @@ async fn main() -> ExitCode {
             }
             cli::ConfigAction::Set => {
                 let (Some(key), Some(value)) = (key, value) else {
-                    eprintln!("pakai: mx config set <key> <value>");
+                    eprintln!("pakai: maicli config set <key> <value>");
                     return ExitCode::from(2);
                 };
                 let Some(global) = global.as_deref() else {
@@ -338,7 +338,7 @@ async fn main() -> ExitCode {
                 eprintln!("{}: {}", err.code, err.message);
                 return ExitCode::from(1);
             }
-            return ExitCode::SUCCESS; // jalankan ulang `mx` memakai config baru
+            return ExitCode::SUCCESS; // jalankan ulang `maicli` memakai config baru
         }
         let code = tui_wire::ErrorCode::KeyMissing;
         eprintln!("{code}: {}", code.user_message());
@@ -374,7 +374,7 @@ async fn main() -> ExitCode {
                     let ids: Vec<String> = models.into_iter().map(|model| model.id).collect();
                     if let Err(err) = models_cache::save(&cache_path, &ids) {
                         tracing::warn!(
-                            target: "mx::models",
+                            target: "maicli::models",
                             "cache model tidak bisa ditulis: {err}"
                         );
                     }
@@ -426,10 +426,10 @@ async fn main() -> ExitCode {
             eprintln!("[extensions] {note}");
         }
     }
-    // Skills: folder proyek + MX_SKILLS_DIR (nama di-dedup); dimuat sebelum
+    // Skills: folder proyek + MAICLI_SKILLS_DIR (nama di-dedup); dimuat sebelum
     // cwd dipindah ke Boot.
     let mut skills_dimuat = tui_tools::skills::temukan(&cwd.join("skills"));
-    if let Ok(custom) = std::env::var("MX_SKILLS_DIR")
+    if let Ok(custom) = std::env::var("MAICLI_SKILLS_DIR")
         && !custom.is_empty()
     {
         let path = std::path::PathBuf::from(custom);
@@ -595,7 +595,8 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-main-{name}-{}", tui_session::new_id()));
+        let dir =
+            std::env::temp_dir().join(format!("maicli-main-{name}-{}", tui_session::new_id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

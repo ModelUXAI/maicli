@@ -1,4 +1,4 @@
-//! Mode ACP (Agent Client Protocol, subagent D) — agen `mx` sebagai
+//! Mode ACP (Agent Client Protocol, subagent D) — agen `maicli` sebagai
 //! **server ACP** di stdin/stdout: host eksternal (Zed dsb.) **dan** lokal
 //! (pipe) mengendalikan agen.
 //!

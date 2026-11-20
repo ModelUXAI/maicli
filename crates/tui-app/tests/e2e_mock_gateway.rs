@@ -1,4 +1,4 @@
-//! E2E tanpa jaringan nyata: binary `mx` melawan gateway tiruan lokal.
+//! E2E tanpa jaringan nyata: binary `maicli` melawan gateway tiruan lokal.
 //!
 //! Membuktikan jalur penuh mode teks: config runtime, klien gateway (SSE),
 //! penyimpanan sesi, perekam `--event-log`, dan format transkrip parity —
@@ -153,7 +153,7 @@ fn temp_root() -> PathBuf {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let unik = COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "mx-e2e-{}-{}-{}",
+        "maicli-e2e-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -170,7 +170,7 @@ fn mode_teks_melawan_gateway_tiruan_dan_merekam_event() {
     let (base_url, _server) = spawn_mock_gateway();
     let root = temp_root();
     let log = root.join("events.jsonl");
-    let out = Command::new(env!("CARGO_BIN_EXE_mx"))
+    let out = Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "text",
@@ -186,10 +186,10 @@ fn mode_teks_melawan_gateway_tiruan_dan_merekam_event() {
             log.to_str().expect("path utf8"),
         ])
         .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-        .env("MX_DATA_DIR", root.join("mxdata"))
+        .env("MAICLI_DATA_DIR", root.join("maicli-data"))
         .stdin(Stdio::null())
         .output()
-        .expect("jalankan binary mx");
+        .expect("jalankan binary maicli");
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     assert!(
         out.status.success(),
@@ -223,7 +223,7 @@ fn rpc_mengizinkan_tool_lewat_frame_approval() {
 
     let (base_url, _server) = spawn_mock_gateway();
     let root = temp_root();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_mx"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "rpc",
@@ -235,12 +235,12 @@ fn rpc_mengizinkan_tool_lewat_frame_approval() {
             "models.default=mock-model",
         ])
         .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-        .env("MX_DATA_DIR", root.join("mxdata"))
+        .env("MAICLI_DATA_DIR", root.join("maicli-data"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .expect("jalankan mx rpc");
+        .expect("jalankan maicli rpc");
     let mut stdin = child.stdin.take().expect("stdin");
     let stdout = child.stdout.take().expect("stdout");
     let (tx, rx) = mpsc::channel::<serde_json::Value>();
@@ -322,14 +322,14 @@ fn crash_di_tengah_turn_tidak_merusak_sesi() {
     let root = temp_root();
     // Cache model dibuat agar discovery tidak menunggu gateway yang menggantung:
     // sesi langsung dibuat, lalu permintaan chat yang macet.
-    let data_dir = root.join("mxdata");
+    let data_dir = root.join("maicli-data");
     std::fs::create_dir_all(&data_dir).expect("data dir");
     std::fs::write(
         data_dir.join("models-cache.json"),
         "{\"fetched_at_ms\":4102444800000,\"models\":[\"mock-model\"]}",
     )
     .expect("cache model");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_mx"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "text",
@@ -343,15 +343,15 @@ fn crash_di_tengah_turn_tidak_merusak_sesi() {
             "models.default=mock-model",
         ])
         .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-        .env("MX_DATA_DIR", data_dir.clone())
+        .env("MAICLI_DATA_DIR", data_dir.clone())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("jalankan mx text");
+        .expect("jalankan maicli text");
 
     // Tunggu berkas sesi muncul (sesi dibuat sebelum permintaan model).
-    let sessions_dir = root.join("mxdata").join("sessions");
+    let sessions_dir = root.join("maicli-data").join("sessions");
     let mut session_path = None;
     for _ in 0..200 {
         if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
@@ -370,7 +370,7 @@ fn crash_di_tengah_turn_tidak_merusak_sesi() {
     let path = match session_path {
         Some(path) => path,
         None => {
-            let tree: Vec<String> = std::fs::read_dir(root.join("mxdata"))
+            let tree: Vec<String> = std::fs::read_dir(root.join("maicli-data"))
                 .map(|entries| {
                     entries
                         .flatten()
@@ -378,7 +378,7 @@ fn crash_di_tengah_turn_tidak_merusak_sesi() {
                         .collect()
                 })
                 .unwrap_or_default();
-            panic!("berkas sesi harus dibuat sebelum turn macet; isi mxdata: {tree:?}");
+            panic!("berkas sesi harus dibuat sebelum turn macet; isi maicli-data: {tree:?}");
         }
     };
 
@@ -434,9 +434,9 @@ fn mode_teks_approval_stdin_mengizinkan_tool() {
     use std::io::Write;
     let (base_url, _server) = spawn_mock_gateway();
     let root = temp_root();
-    let data_dir = root.join("mxdata");
+    let data_dir = root.join("maicli-data");
     std::fs::create_dir_all(&data_dir).expect("data dir");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_mx"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "text",
@@ -450,12 +450,12 @@ fn mode_teks_approval_stdin_mengizinkan_tool() {
             "models.default=mock-model",
         ])
         .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-        .env("MX_DATA_DIR", &data_dir)
+        .env("MAICLI_DATA_DIR", &data_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("jalankan mx text");
+        .expect("jalankan maicli text");
     {
         let stdin = child.stdin.as_mut().expect("stdin");
         stdin.write_all(b"y\n").expect("jawab approval");
@@ -502,9 +502,9 @@ fn kunci_api_tidak_bocor_ke_sesi_maupun_log() {
     const KUNCI: &str = "kunci-rahasia-uji-jangan-bocor-123";
     let (base_url, _server) = spawn_mock_gateway();
     let root = temp_root();
-    let data_dir = root.join("mxdata");
+    let data_dir = root.join("maicli-data");
     std::fs::create_dir_all(&data_dir).expect("data dir");
-    let out = Command::new(env!("CARGO_BIN_EXE_mx"))
+    let out = Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "text",
@@ -518,12 +518,12 @@ fn kunci_api_tidak_bocor_ke_sesi_maupun_log() {
             "models.default=mock-model",
         ])
         .env("MODELUXAI_API_KEY", KUNCI)
-        .env("MX_DATA_DIR", &data_dir)
+        .env("MAICLI_DATA_DIR", &data_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .output()
-        .expect("jalankan mx text");
+        .expect("jalankan maicli text");
     assert!(
         out.status.success(),
         "binary harus sukses: {}",
@@ -552,7 +552,7 @@ fn mode_teks_tool_mcp_lewat_turn_penuh() {
     // E2E: server MCP PowerShell dijalankan, didaftarkan lewat config
     // [mcp.servers.*], model memanggil tool MCP, hasilnya kembali di jawaban.
     let dir_mcp = std::env::temp_dir().join(format!(
-        "mx-e2e-mcp-{}-{}",
+        "maicli-e2e-mcp-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -594,18 +594,18 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
 
     let (base_url, _server) = spawn_mock_gateway_tool_call("mcp.e2e.wap".to_string());
     let root = temp_root();
-    let mx_dir = root.join(".mx");
-    std::fs::create_dir_all(&mx_dir).expect("buat .mx");
+    let maicli_dir = root.join(".maicli");
+    std::fs::create_dir_all(&maicli_dir).expect("buat .maicli");
     let skrip_toml = skrip.display().to_string().replace('\\', "\\\\");
     std::fs::write(
-        mx_dir.join("config.toml"),
+        maicli_dir.join("config.toml"),
         format!(
             "[mcp.servers.e2e]\ncommand = \"powershell\"\nargs = [\"-NoProfile\", \"-ExecutionPolicy\", \"Bypass\", \"-File\", \"{skrip_toml}\"]\n"
         ),
     )
     .expect("tulis config proyek");
     let log = root.join("events.jsonl");
-    let out = Command::new(env!("CARGO_BIN_EXE_mx"))
+    let out = Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "text",
@@ -623,10 +623,10 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
             log.to_str().expect("path utf8"),
         ])
         .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-        .env("MX_DATA_DIR", root.join("mxdata"))
+        .env("MAICLI_DATA_DIR", root.join("maicli-data"))
         .stdin(Stdio::null())
         .output()
-        .expect("jalankan binary mx");
+        .expect("jalankan binary maicli");
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     assert!(
         out.status.success(),
@@ -649,7 +649,7 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
 
 #[test]
 fn mode_relay_ws_room_control_guest() {
-    // E2E `mx --mode relay`: klien WS pertama = control (prompt jalan), kedua =
+    // E2E `maicli --mode relay`: klien WS pertama = control (prompt jalan), kedua =
     // guest (view; prompt ditolak); guest menerima siaran event.
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message as Ws;
@@ -661,7 +661,7 @@ fn mode_relay_ws_room_control_guest() {
     rt.block_on(async move {
         let (base_url, _gateway) = spawn_mock_gateway();
         let dir = std::env::temp_dir().join(format!(
-            "mx-e2e-relay-{}-{}",
+            "maicli-e2e-relay-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -672,7 +672,7 @@ fn mode_relay_ws_room_control_guest() {
         let probe = std::net::TcpListener::bind("127.0.0.1:0").expect("probe");
         let port = probe.local_addr().expect("alamat").port();
         drop(probe);
-        let mut server = std::process::Command::new(env!("CARGO_BIN_EXE_mx"))
+        let mut server = std::process::Command::new(env!("CARGO_BIN_EXE_maicli"))
             .args([
                 "--mode",
                 "relay",
@@ -686,10 +686,10 @@ fn mode_relay_ws_room_control_guest() {
                 "models.default=mock-model",
             ])
             .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-            .env("MX_RELAY_KEY", "kunci-room-uji")
-            .env("MX_DATA_DIR", dir.join("mxdata"))
+            .env("MAICLI_RELAY_KEY", "kunci-room-uji")
+            .env("MAICLI_DATA_DIR", dir.join("maicli-data"))
             .spawn()
-            .expect("jalankan mx relay");
+            .expect("jalankan maicli relay");
         // Tunggu port siap.
         let mut siap = false;
         for _ in 0..50 {
@@ -779,7 +779,7 @@ fn mode_relay_ws_room_control_guest() {
 
 #[test]
 fn mode_acp_host_mengendalikan_agen() {
-    // E2E ACP: proses `mx --mode acp` dikendalikan host (di sini test = host
+    // E2E ACP: proses `maicli --mode acp` dikendalikan host (di sini test = host
     // eksternal): initialize -> session/new -> session/prompt -> update stream
     // -> result stopReason end_turn; cancel tanpa galat.
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -789,7 +789,7 @@ fn mode_acp_host_mengendalikan_agen() {
     rt.block_on(async move {
         let (base_url, _gateway) = spawn_mock_gateway();
         let dir = std::env::temp_dir().join(format!(
-            "mx-e2e-acp-{}-{}",
+            "maicli-e2e-acp-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -797,7 +797,7 @@ fn mode_acp_host_mengendalikan_agen() {
                 .unwrap_or(0)
         ));
         std::fs::create_dir_all(&dir).expect("dir uji");
-        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_mx"))
+        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_maicli"))
             .args([
                 "--mode",
                 "acp",
@@ -809,12 +809,12 @@ fn mode_acp_host_mengendalikan_agen() {
                 "models.default=mock-model",
             ])
             .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-            .env("MX_DATA_DIR", dir.join("mxdata"))
+            .env("MAICLI_DATA_DIR", dir.join("maicli-data"))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .expect("jalankan mx acp");
+            .expect("jalankan maicli acp");
         let mut stdin = child.stdin.take().expect("stdin");
         let mut stdout =
             tokio::io::BufReader::new(child.stdout.take().expect("stdout")).lines();
@@ -910,10 +910,10 @@ fn mode_acp_host_mengendalikan_agen() {
 
 #[test]
 fn mode_serve_api_lokal_health_prompt_sessions() {
-    // E2E `mx --mode serve`: health, prompt (mock gateway), sessions.
+    // E2E `maicli --mode serve`: health, prompt (mock gateway), sessions.
     let (base_url, _gateway) = spawn_mock_gateway();
     let dir = std::env::temp_dir().join(format!(
-        "mx-e2e-serve-{}-{}",
+        "maicli-e2e-serve-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -921,13 +921,13 @@ fn mode_serve_api_lokal_health_prompt_sessions() {
             .unwrap_or(0)
     ));
     std::fs::create_dir_all(&dir).expect("dir uji");
-    let mx_dir = dir.join(".mx");
-    std::fs::create_dir_all(&mx_dir).expect("dir config");
+    let maicli_dir = dir.join(".maicli");
+    std::fs::create_dir_all(&maicli_dir).expect("dir config");
     // Pilih port bebas.
     let probe = std::net::TcpListener::bind("127.0.0.1:0").expect("probe");
     let port = probe.local_addr().expect("alamat").port();
     drop(probe);
-    let mut server = std::process::Command::new(env!("CARGO_BIN_EXE_mx"))
+    let mut server = std::process::Command::new(env!("CARGO_BIN_EXE_maicli"))
         .args([
             "--mode",
             "serve",
@@ -941,9 +941,9 @@ fn mode_serve_api_lokal_health_prompt_sessions() {
             "models.default=mock-model",
         ])
         .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-        .env("MX_DATA_DIR", dir.join("mxdata"))
+        .env("MAICLI_DATA_DIR", dir.join("maicli-data"))
         .spawn()
-        .expect("jalankan mx serve");
+        .expect("jalankan maicli serve");
     // Tunggu server siap.
     let mut siap = false;
     for _ in 0..50 {
@@ -955,8 +955,8 @@ fn mode_serve_api_lokal_health_prompt_sessions() {
     }
     assert!(siap, "serve tidak siap");
 
-    // Token serve: file 0600 dibuat otomatis di MX_DATA_DIR (config_root).
-    let jalur_token = dir.join("mxdata").join("serve-token");
+    // Token serve: file 0600 dibuat otomatis di MAICLI_DATA_DIR (config_root).
+    let jalur_token = dir.join("maicli-data").join("serve-token");
     let mut token = String::new();
     for _ in 0..50 {
         if let Ok(isi) = std::fs::read_to_string(&jalur_token) {

@@ -69,7 +69,7 @@ mod tests {
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("mx-models-cache-{}-{name}", std::process::id()));
+            std::env::temp_dir().join(format!("maicli-models-cache-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join("models-cache.json")
     }

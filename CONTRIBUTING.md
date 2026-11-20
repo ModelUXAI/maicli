@@ -1,4 +1,4 @@
-# Berkontribusi — ModeluXAI TUI (mx)
+# Berkontribusi — ModeluXAI TUI (maicli)
 
 Terima kasih mau berkontribusi! Proyek ini open-source dengan **gerbang mutu yang
 sama untuk semua orang** (termasuk maintainer) — setiap PR melewati CI sebelum bisa

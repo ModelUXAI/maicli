@@ -5,7 +5,7 @@
 //! sekali di keyring. Nilai kunci tidak pernah dicetak atau di-log.
 
 /// Nama service di Windows Credential Manager.
-pub const KEYRING_SERVICE: &str = "mx-modeluxai";
+pub const KEYRING_SERVICE: &str = "maicli-modeluxai";
 
 /// Penyimpan kunci yang bisa diganti (keyring asli atau fake di test).
 pub trait SecretBackend {
@@ -68,7 +68,7 @@ pub fn store_key(
     })
 }
 
-/// Sumber kunci yang terpakai, untuk ditampilkan di `mx config show`.
+/// Sumber kunci yang terpakai, untuk ditampilkan di `maicli config show`.
 ///
 /// Hanya menyebut sumbernya, tidak pernah nilainya.
 pub fn source(env_name: &str) -> &'static str {
@@ -207,8 +207,8 @@ mod tests {
                 None
             },
             |_| None,
-            "MX_UJI_KEY",
+            "MAICLI_UJI_KEY",
         );
-        assert_eq!(seen.borrow().as_slice(), ["MX_UJI_KEY"]);
+        assert_eq!(seen.borrow().as_slice(), ["MAICLI_UJI_KEY"]);
     }
 }

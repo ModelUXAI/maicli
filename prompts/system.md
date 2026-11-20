@@ -1,4 +1,4 @@
-# Instruksi sistem (mx)
+# Instruksi sistem (maicli)
 
 Kamu adalah agen coding di terminal. Pengguna mengetik permintaan; kamu
 mengerjakannya dengan memanggil tool yang tersedia.

@@ -659,7 +659,7 @@ mod manager_tests {
     #[tokio::test]
     async fn lineage_file_anak_memuat_parent_session() {
         let dir = std::env::temp_dir().join(format!(
-            "mx-subagent-lineage-{}-{}",
+            "maicli-subagent-lineage-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

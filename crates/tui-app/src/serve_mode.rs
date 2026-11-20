@@ -1,11 +1,11 @@
-//! API server lokal (`mx serve`): HTTP/1.1 minimal di loopback saja.
+//! API server lokal (`maicli serve`): HTTP/1.1 minimal di loopback saja.
 //!
 //! Endpoint:
 //! - `GET /api/health` — status server (model, jumlah sesi hidup).
 //! - `POST /api/prompt` — `{"message": "…"}`: satu turn penuh; jawaban JSON.
 //! - `GET /api/sessions` — daftar sesi tersimpan.
 //!
-//! Keamanan: bind **127.0.0.1 saja**; bila env `MX_SERVE_TOKEN` diset, semua
+//! Keamanan: bind **127.0.0.1 saja**; bila env `MAICLI_SERVE_TOKEN` diset, semua
 //! request wajib `Authorization: Bearer <token>`. Tool yang butuh persetujuan
 //! manusia ditolak otomatis (server tanpa UI — kebijakan approval dari config
 //! tetap berlaku untuk tier yang diizinkan mode).
@@ -110,10 +110,10 @@ pub async fn run(
             format!("tidak bisa bind {addr}: {e} — port mungkin dipakai proses lain"),
         )
     })?;
-    // Token: env `MX_SERVE_TOKEN` menang; bila kosong, token dibaca/dibuat di
+    // Token: env `MAICLI_SERVE_TOKEN` menang; bila kosong, token dibaca/dibuat di
     // berkas `serve-token` (0600) di direktori data — sehingga server TIDAK
     // PERNAH berjalan tanpa otentikasi kecuali file dihapus.
-    let mut token = std::env::var("MX_SERVE_TOKEN").unwrap_or_default();
+    let mut token = std::env::var("MAICLI_SERVE_TOKEN").unwrap_or_default();
     let jalur_token = crate::config_root().join("serve-token");
     if token.is_empty() {
         match std::fs::read_to_string(&jalur_token) {
@@ -121,7 +121,7 @@ pub async fn run(
             Err(_) => {
                 // Buat token acak sederhana (waktu + pid + alamat listen).
                 let baru = format!(
-                    "mx-{:x}{:x}{:x}",
+                    "maicli-{:x}{:x}{:x}",
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|n| n.as_nanos())
@@ -158,11 +158,13 @@ pub async fn run(
         tui_approval::ApprovalPolicy::from(config.approval.clone()),
     ));
     eprintln!(
-        "mx serve mendengarkan http://{addr} (model {})",
+        "maicli serve mendengarkan http://{addr} (model {})",
         config.models.default
     );
     if token.is_empty() {
-        eprintln!("PERINGATAN: MX_SERVE_TOKEN tidak diset — API tanpa autentikasi (loopback saja)");
+        eprintln!(
+            "PERINGATAN: MAICLI_SERVE_TOKEN tidak diset — API tanpa autentikasi (loopback saja)"
+        );
     }
     let riwayat = Arc::new(Riwayat::default());
     let ctx = Arc::new(ServeCtx {

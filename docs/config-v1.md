@@ -1,6 +1,6 @@
 # Skema config v1 (`config.toml`)
 
-Dokumen ini adalah rujukan skema config yang dipakai `mx`. Semua nilai dibaca
+Dokumen ini adalah rujukan skema config yang dipakai `maicli`. Semua nilai dibaca
 dari TOML; **`config.yml` milik omp tidak dibaca**.
 
 ## Lokasi file
@@ -9,7 +9,7 @@ dari TOML; **`config.yml` milik omp tidak dibaca**.
 |---|---|---|
 | default | nilai bawaan di kode | terendah |
 | global | `%APPDATA%\ModeluXAI\TUI\config.toml` | menimpa default |
-| proyek | `<cwd>/.mx/config.toml` | menimpa global |
+| proyek | `<cwd>/.maicli/config.toml` | menimpa global |
 | runtime | flag CLI: `--set bagian.kunci=nilai` (boleh diulang) dan `--model` | tertinggi |
 
 Tidak ada file-watching: **perubahan config butuh restart** aplikasi agar
@@ -30,7 +30,7 @@ dengan pesan yang menyebut file, baris, dan nama kunci.
 
 Kunci API tidak pernah disimpan di file ini. Urutan pencarian: **environment
 variable** lalu **keyring OS** (Windows Credential Manager, service
-`mx-modeluxai`, user = nama env var). `mx config key-import` menyalin nilai dari
+`maicli-modeluxai`, user = nama env var). `maicli config key-import` menyalin nilai dari
 env var ke keyring tanpa mencetaknya.
 
 ### `[models]`
@@ -114,19 +114,19 @@ Perilaku:
   tidak terhubung: …` (TUI/teks) atau event `notice` (RPC).
 - `command` kosong ditolak saat memuat config; field asing ditolak
   (`deny_unknown_fields`).
-- `mx config show` menampilkan `mcp.timeout_secs` dan daftar nama server (tanpa
+- `maicli config show` menampilkan `mcp.timeout_secs` dan daftar nama server (tanpa
   nilai env).
 
 ## Perintah terkait
 
-- `mx config show` — config **efektif** + asal tiap nilai (`[default]`,
+- `maicli config show` — config **efektif** + asal tiap nilai (`[default]`,
   `[file global]`, `[file proyek]`), menyebut **sumber** kunci API
   (`env`/`keyring`/`tidak ada`) tanpa pernah menampilkan nilainya.
-- `mx config path` — path file global dan proyek.
-- `mx config set <key> <value>` — tulis satu nilai ke file global secara atomik
+- `maicli config path` — path file global dan proyek.
+- `maicli config set <key> <value>` — tulis satu nilai ke file global secara atomik
   (key lain dipertahankan); nilai divalidasi sebelum file disentuh.
-- `mx config key-import` — simpan kunci dari env var ke keyring.
-- `mx --set bagian.kunci=nilai` — override sekali jalan (tidak menulis file); nilai divalidasi,
+- `maicli config key-import` — simpan kunci dari env var ke keyring.
+- `maicli --set bagian.kunci=nilai` — override sekali jalan (tidak menulis file); nilai divalidasi,
   dan `config show` menandainya sebagai `<runtime --set>`.
 
 ## Lokasi lain yang dipakai
@@ -143,5 +143,5 @@ Berkas config, grant, dan sesi dibatasi ACL-nya ke pengguna saat ini
 (`icacls /inheritance:r /grant:r <user>:F`; warisan ACL dimatikan) — dibuktikan
 test `acl_restricted`, bukan diasumsikan.
 
-`MX_DATA_DIR` (env) menimpa seluruh direktori data (config/sesi/log/cache) — dipakai instalasi portabel dan test E2E terisolasi; tidak mengubah isi berkas.\n\nSemua path dihitung dari `directories` (bukan path hardcode) dan relatif ke
+`MAICLI_DATA_DIR` (env) menimpa seluruh direktori data (config/sesi/log/cache) — dipakai instalasi portabel dan test E2E terisolasi; tidak mengubah isi berkas.\n\nSemua path dihitung dari `directories` (bukan path hardcode) dan relatif ke
 direktori kerja sesi untuk bagian proyek.

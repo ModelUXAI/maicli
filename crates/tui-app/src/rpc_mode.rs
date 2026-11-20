@@ -1849,7 +1849,7 @@ mod tests {
     use super::*;
 
     fn spool_uji() -> Arc<Spool> {
-        let dir = std::env::temp_dir().join(format!("mx-spool-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-spool-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         Arc::new(Spool::new(&dir))
     }
@@ -1969,7 +1969,7 @@ mod tests {
 
     #[test]
     fn set_host_tools_diregistrasi_dengan_prefix_host() {
-        let dir = std::env::temp_dir().join(format!("mx-hosttools-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-hosttools-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (tx, _rx) = tui_core::agent::event_channel();
         let mut session = tui_core::AgentSession::new(
@@ -2018,7 +2018,8 @@ mod tests {
 
     #[test]
     fn set_host_tools_duplikat_ditolak() {
-        let dir = std::env::temp_dir().join(format!("mx-hosttools-dupe-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("maicli-hosttools-dupe-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (tx, _rx) = tui_core::agent::event_channel();
         let mut session = tui_core::AgentSession::new(
@@ -2057,7 +2058,8 @@ mod tests {
 
     #[test]
     fn set_host_tools_kosong_menghapus_semua_host() {
-        let dir = std::env::temp_dir().join(format!("mx-hosttools-kosong-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("maicli-hosttools-kosong-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (tx, _rx) = tui_core::agent::event_channel();
         let mut session = tui_core::AgentSession::new(
@@ -2274,7 +2276,7 @@ mod tests {
     #[tokio::test]
     async fn buka_sesi_rpc_memuat_pesannya() {
         let dir = std::env::temp_dir().join(format!(
-            "mx-rpc-open-{}-{}",
+            "maicli-rpc-open-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2413,7 +2415,7 @@ mod tests {
     async fn replay_spool_mengirim_ulang_frame_tertahan() {
         // Spool → replay memainkan ulang isi; frame `spool_replayed` + decode.
         let (sink, mut penerima) = tokio::sync::mpsc::channel::<String>(4);
-        let dir = std::env::temp_dir().join(format!("mx-replay-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-replay-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let spool = Arc::new(Spool::new(&dir));
         let out = Out::new(sink, spool.clone());
@@ -2630,7 +2632,7 @@ mod tests {
     #[tokio::test]
     async fn spool_menampung_frame_saat_kanal_penuh() {
         let dir = std::env::temp_dir().join(format!(
-            "mx-spool-uji-{}-{}",
+            "maicli-spool-uji-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2661,7 +2663,7 @@ mod tests {
     async fn spool_buf_mencegah_keracunan_kunci() {
         // Mutex std dipakai singkat (tanpa .await di dalam); pola ini aman dan
         // diuji lewat dua push beruntun + flush.
-        let dir = std::env::temp_dir().join(format!("mx-spool-buf-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-spool-buf-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let spool = Arc::new(Spool::new(&dir));
         for i in 0..600 {

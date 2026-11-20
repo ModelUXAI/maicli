@@ -1,4 +1,4 @@
-//! SDK embedding Rust untuk sesi agent `mx`.
+//! SDK embedding Rust untuk sesi agent `maicli`.
 //!
 //! Crate ini adalah permukaan publik yang dijanjikan stabil (lihat
 //! `docs/sdk-rust-v1.md`): embedder tidak perlu menyentuh `tui-core` langsung,

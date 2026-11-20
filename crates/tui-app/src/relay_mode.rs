@@ -1,10 +1,10 @@
 //! Relay WebSocket collab (adopsi omp ws relay, v1).
 //!
-//! `mx --mode relay --port N` menjalankan **satu room** di loopback:
+//! `maicli --mode relay --port N` menjalankan **satu room** di loopback:
 //! - klien pertama per room = **control** (boleh prompt/abort);
 //! - klien berikutnya = **guest** (view saja — menerima siaran event);
 //! - control dapat mengangkat guest via `{"promote":true}`;
-//! - kunci room: env `MX_RELAY_KEY` menang, bila kosong kunci acak ditulis ke
+//! - kunci room: env `MAICLI_RELAY_KEY` menang, bila kosong kunci acak ditulis ke
 //!   `<config_root>/relay-key` (izin pengguna saja) — room TIDAK pernah
 //!   terbuka tanpa kunci.
 //!
@@ -44,14 +44,14 @@ pub async fn run(
         .await
         .map_err(|e| galat_config(format!("tidak bisa bind {addr}: {e}")))?;
     // Kunci room: env menang; bila kosong, acak ditulis ke berkas relay-key.
-    let mut kunci = std::env::var("MX_RELAY_KEY").unwrap_or_default();
+    let mut kunci = std::env::var("MAICLI_RELAY_KEY").unwrap_or_default();
     let jalur_kunci = crate::config_root().join("relay-key");
     if kunci.is_empty() {
         match std::fs::read_to_string(&jalur_kunci) {
             Ok(ada) => kunci = ada.trim().to_string(),
             Err(_) => {
                 let baru = format!(
-                    "mx-relay-{:x}{:x}{:x}",
+                    "maicli-relay-{:x}{:x}{:x}",
                     std::process::id(),
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -69,11 +69,11 @@ pub async fn run(
         }
     }
     eprintln!(
-        "mx relay mendengarkan ws://{addr} (model {})",
+        "maicli relay mendengarkan ws://{addr} (model {})",
         config.models.default
     );
-    if std::env::var("MX_RELAY_KEY").is_ok() {
-        eprintln!("kunci room: dari env MX_RELAY_KEY");
+    if std::env::var("MAICLI_RELAY_KEY").is_ok() {
+        eprintln!("kunci room: dari env MAICLI_RELAY_KEY");
     } else {
         eprintln!("kunci room disimpan: {}", jalur_kunci.display());
     }

@@ -2,7 +2,7 @@
 //!
 //! Dengan `--event-log <FILE>`, setiap `AgentEvent` yang mengalir ke UI juga
 //! ditulis sebagai satu baris JSON ke berkas. Hasilnya bisa dibandingkan dengan
-//! transkrip acuan memakai `mx --parity-expected/--parity-actual`.
+//! transkrip acuan memakai `maicli --parity-expected/--parity-actual`.
 //!
 //! Pencatatan bersifat best-effort: kegagalan menulis log tidak boleh
 //! menggagalkan sesi pengguna (dicatat di `tracing`).
@@ -39,7 +39,7 @@ pub fn channel(
         {
             Ok(file) => Some(tokio::io::BufWriter::new(file)),
             Err(err) => {
-                tracing::warn!(target: "mx::event_log", "log event tidak bisa dibuka: {err}");
+                tracing::warn!(target: "maicli::event_log", "log event tidak bisa dibuka: {err}");
                 None
             }
         };
@@ -54,11 +54,11 @@ pub fn channel(
                         }
                         .await;
                         if let Err(err) = written {
-                            tracing::warn!(target: "mx::event_log", "gagal menulis log event: {err}");
+                            tracing::warn!(target: "maicli::event_log", "gagal menulis log event: {err}");
                         }
                     }
                     Err(err) => {
-                        tracing::warn!(target: "mx::event_log", "event tidak bisa diserialisasi: {err}");
+                        tracing::warn!(target: "maicli::event_log", "event tidak bisa diserialisasi: {err}");
                     }
                 }
             }
@@ -90,7 +90,8 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-eventlog-{}-{name}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("maicli-eventlog-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join("events.jsonl")
     }
@@ -133,7 +134,8 @@ mod tests {
 
     #[tokio::test]
     async fn direktori_log_dibuat_otomatis() {
-        let dir = std::env::temp_dir().join(format!("mx-eventlog-nested-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("maicli-eventlog-nested-{}", std::process::id()));
         let path = dir.join("sub").join("events.jsonl");
         let (tx, mut rx, _done) = channel(Some(path.clone()));
         tx.send(AgentEvent::AgentStart).unwrap();

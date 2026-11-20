@@ -95,7 +95,7 @@ fn daftar_provider() -> Vec<(String, String, String)> {
 /// Jalankan wizard; `Ok(())` = config terisi (minta restart), `Err` = dibatalkan.
 pub async fn jalankan() -> Result<(), MxError> {
     println!("╭──────────────────────────────────────────────╮");
-    println!("│  Setup awal ModeluXAI (mx) — pertama kali    │");
+    println!("│  Setup awal ModeluXAI (maicli) — pertama kali    │");
     println!("╰──────────────────────────────────────────────╯");
     println!();
     // 1) Pilih provider.
@@ -191,7 +191,7 @@ pub async fn jalankan() -> Result<(), MxError> {
         Err(_) => println!("✗ gateway tidak bisa dibuat — set gateway.base_url secara manual"),
     }
     println!();
-    println!("Setup selesai ✓ — jalankan ulang: mx");
+    println!("Setup selesai ✓ — jalankan ulang: maicli");
     Ok(())
 }
 

@@ -5,7 +5,7 @@
 **Jangan buka issue publik** untuk laporan keamanan. Gunakan:
 
 - GitHub **Private vulnerability reporting** (tab Security → Report a vulnerability), atau
-- email: `iqbalnaveliano@gmail.com` (subject: `[SECURITY] mx`).
+- email: `iqbalnaveliano@gmail.com` (subject: `[SECURITY] maicli`).
 
 Sertakan: versi/commit, platform, langkah reproduksi, dampak. Balasan target: 7 hari.
 

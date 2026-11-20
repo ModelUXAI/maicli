@@ -1028,7 +1028,7 @@ mod tests {
     use std::fs;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-tools-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-tools-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -1493,7 +1493,7 @@ mod tests {
         ] {
             assert!(nama_env_rahasia(nama), "{nama} harus dikenali");
         }
-        for nama in ["PATH", "USERNAME", "TEMP", "MX_DATA_DIR"] {
+        for nama in ["PATH", "USERNAME", "TEMP", "MAICLI_DATA_DIR"] {
             assert!(!nama_env_rahasia(nama), "{nama} bukan kredensial");
         }
     }

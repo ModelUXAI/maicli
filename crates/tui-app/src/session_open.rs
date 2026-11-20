@@ -32,9 +32,10 @@ pub async fn append(store: &mut Option<SessionStore>, entry: tui_session::Sessio
 
 /// Buat store sesi baru di `sessions_dir` (dipakai `/new`).
 pub async fn create_new(sessions_dir: PathBuf, cwd: String) -> Result<SessionStore, MxError> {
-    let created =
-        tokio::task::spawn_blocking(move || SessionStore::create(&sessions_dir, "sesi mx", &cwd))
-            .await;
+    let created = tokio::task::spawn_blocking(move || {
+        SessionStore::create(&sessions_dir, "sesi maicli", &cwd)
+    })
+    .await;
     match created {
         Ok(result) => result,
         Err(_) => Err(MxError::new(
@@ -77,7 +78,7 @@ pub async fn open_or_create(
 ) -> Result<SessionStore, MxError> {
     let opened = tokio::task::spawn_blocking(move || match resume {
         Some(path) => SessionStore::open(&path),
-        None => SessionStore::create(&sessions_dir, "sesi mx", &cwd),
+        None => SessionStore::create(&sessions_dir, "sesi maicli", &cwd),
     })
     .await;
     match opened {
@@ -95,7 +96,7 @@ mod tests {
     use super::*;
 
     fn temp_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("mx-open-{name}-{}", tui_session::new_id()))
+        std::env::temp_dir().join(format!("maicli-open-{name}-{}", tui_session::new_id()))
     }
 
     #[tokio::test]

@@ -1845,7 +1845,7 @@ mod tests {
 
     #[tokio::test]
     async fn tidak_ada_tool_yang_melewati_gate_approval() {
-        let dir = std::env::temp_dir().join(format!("mx-gate-{}", tui_session::new_id()));
+        let dir = std::env::temp_dir().join(format!("maicli-gate-{}", tui_session::new_id()));
         std::fs::create_dir_all(&dir).expect("buat dir");
         let sentinel = dir.join("ditulis.txt");
         let marker = dir.join("marker.txt");

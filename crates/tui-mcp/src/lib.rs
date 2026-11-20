@@ -1,5 +1,5 @@
 //! Klien MCP (Model Context Protocol) transport **stdio** dan bridge tool untuk
-//! agent `mx`.
+//! agent `maicli`.
 //!
 //! Status v1: `initialize` → `notifications/initialized` → `tools/list` →
 //! `tools/call`, ditambah penanganan request server (`ping`, `roots/list`).
@@ -289,7 +289,7 @@ impl McpClient {
                 json!({
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": {},
-                    "clientInfo": {"name": "mx", "version": env!("CARGO_PKG_VERSION")}
+                    "clientInfo": {"name": "maicli", "version": env!("CARGO_PKG_VERSION")}
                 }),
             )
             .await?;
@@ -712,7 +712,7 @@ impl HttpMcpClient {
             json!({
                 "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {"name": "mx", "version": env!("CARGO_PKG_VERSION")}
+                "clientInfo": {"name": "maicli", "version": env!("CARGO_PKG_VERSION")}
             }),
         )
         .await?;
@@ -796,7 +796,7 @@ mod tests {
     #[cfg(windows)]
     fn temp_dir(tag: &str) -> std::path::PathBuf {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("mx-mcp-{tag}-{}-{n}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-mcp-{tag}-{}-{n}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         dir
     }

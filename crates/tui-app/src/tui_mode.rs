@@ -1591,7 +1591,7 @@ fn spawn_worker(
                             match crate::session_open::fork_current(
                                 current,
                                 boot.sessions_dir.clone(),
-                                "sesi mx (fork)".to_string(),
+                                "sesi maicli (fork)".to_string(),
                             )
                             .await
                             {
@@ -2411,7 +2411,7 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
         screen.push_line(format!("[mcp] {note}"));
     }
     // Untuk pengukuran kriteria C-09: latensi delta streaming dan durasi frame
-    // dicatat ke log (bukan dirasakan), aktif dengan MX_LOG=debug.
+    // dicatat ke log (bukan dirasakan), aktif dengan MAICLI_LOG=debug.
     let mut last_delta_at: Option<std::time::Instant> = None;
     loop {
         while let Ok(event) = events_rx.try_recv() {
@@ -2438,13 +2438,13 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
             .draw(|frame| draw(frame, &mut screen))
             .map_err(io_error)?;
         tracing::debug!(
-            target: "mx::tui",
+            target: "maicli::tui",
             frame_ms = frame_start.elapsed().as_millis() as u64,
             "frame dirender"
         );
         if let Some(received_at) = last_delta_at.take() {
             tracing::debug!(
-                target: "mx::tui",
+                target: "maicli::tui",
                 delta_ms = received_at.elapsed().as_millis() as u64,
                 "delta streaming dirender"
             );
@@ -2782,13 +2782,13 @@ mod tests {
     fn frame_emas_tiga_ukuran() {
         // Layar contoh: pesan + status; komposisi harus stabil antarukuran.
         let mut layar = screen();
-        layar.push_line("halo dari mx".to_string());
+        layar.push_line("halo dari maicli".to_string());
         layar.push_line("baris kedua".to_string());
         let mut emas = Vec::new();
         for (lebar, tinggi) in [(80u16, 24u16), (120, 40), (200, 50)] {
             let mut layar_uji = {
                 let mut l = screen();
-                l.push_line("halo dari mx".to_string());
+                l.push_line("halo dari maicli".to_string());
                 l.push_line("baris kedua".to_string());
                 l
             };
@@ -2803,7 +2803,7 @@ mod tests {
             );
             let konten: String = frame.join("\n");
             assert!(
-                konten.contains("halo dari mx"),
+                konten.contains("halo dari maicli"),
                 "{lebar}x{tinggi}: {konten}"
             );
             assert!(konten.contains("baris kedua"));
@@ -3025,7 +3025,7 @@ provider "uji-cat2" {
     ) -> Result<Option<tui_katalog::AturanProvider>, String> {
         // Re-implementasi parser tunggal via susun folder sementara.
         let dir = std::env::temp_dir().join(format!(
-            "mx-cat-uji-{}-{}",
+            "maicli-cat-uji-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -3500,11 +3500,11 @@ provider "uji-cat2" {
     fn teks_histori_mendukung_tebal_dan_kode() {
         let accent = Color::Yellow;
         let dim = Color::DarkGray;
-        let spans = inline_spans("pakai `mx --version` ya **sayang**", accent, dim);
+        let spans = inline_spans("pakai `maicli --version` ya **sayang**", accent, dim);
         assert!(spans.len() >= 4, "harus terpecah: {spans:?}");
         let Some(code) = spans
             .iter()
-            .find(|span| span.content.as_ref() == "mx --version")
+            .find(|span| span.content.as_ref() == "maicli --version")
         else {
             panic!("span kode tidak ada: {spans:?}");
         };
@@ -3628,7 +3628,7 @@ provider "uji-cat2" {
     fn test_boot(base_url: &str) -> crate::Boot {
         use tui_config::{ApprovalConfig, LimitsConfig, UiConfig};
         let dir = std::env::temp_dir().join(format!(
-            "mx-worker-{}-{}",
+            "maicli-worker-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

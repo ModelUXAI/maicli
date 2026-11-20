@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "mx"
+name = "maicli"
 path = "src/main.rs"
 
 [dependencies]

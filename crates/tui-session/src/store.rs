@@ -500,7 +500,7 @@ impl SessionStore {
             }
         }
         if let Err(err) = tui_wire::secure_file::restrict_to_current_user(path) {
-            tracing::warn!(target: "mx::session", "ACL sesi tidak bisa dipersempit: {err}");
+            tracing::warn!(target: "maicli::session", "ACL sesi tidak bisa dipersempit: {err}");
         }
         let written = fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
         let lock = acquire_lock(path)?;
@@ -795,7 +795,7 @@ mod tests {
     use tui_wire::Message;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-session-test-{name}-{}", new_id()));
+        let dir = std::env::temp_dir().join(format!("maicli-session-test-{name}-{}", new_id()));
         fs::create_dir_all(&dir).unwrap();
         dir
     }

@@ -1,4 +1,4 @@
-//! CLI `mx`: antarmuka baris perintah untuk sesi agent.
+//! CLI `maicli`: antarmuka baris perintah untuk sesi agent.
 
 use std::path::PathBuf;
 
@@ -21,7 +21,7 @@ pub enum Mode {
     Acp,
 }
 
-/// Aksi `mx config`.
+/// Aksi `maicli config`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ConfigAction {
     /// Tampilkan config efektif beserta asal nilainya.
@@ -36,7 +36,7 @@ pub enum ConfigAction {
 
 /// Argumen baris perintah.
 #[derive(Debug, Parser)]
-#[command(name = "mx", version, about = "TUI agentic ModeluXAI")]
+#[command(name = "maicli", version, about = "TUI agentic ModeluXAI")]
 pub struct Cli {
     /// Mode UI.
     #[arg(long, value_enum, default_value_t = Mode::Tui)]

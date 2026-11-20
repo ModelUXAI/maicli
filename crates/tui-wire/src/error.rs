@@ -113,7 +113,7 @@ impl ErrorCode {
             Self::AgentBusy => "Sesi masih memproses turn sebelumnya. Tunggu sampai selesai.",
             Self::Protocol => "Permintaan tidak dikenali. Periksa bentuk JSON dan field type.",
             Self::SessionNotFound => {
-                "Sesi tidak ditemukan. Jalankan `mx --list-sessions` untuk melihat id."
+                "Sesi tidak ditemukan. Jalankan `maicli --list-sessions` untuk melihat id."
             }
             Self::SessionLocked => {
                 "File sesi sedang dipakai proses lain. Tutup proses itu, atau hapus file .lock bila prosesnya sudah mati."

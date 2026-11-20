@@ -14,7 +14,7 @@ Dependensi tanpa alasan = kartu tidak DONE (`AGENTS.md` §3).
 | `thiserror` | 2 | error bernama per crate (`AGENTS.md` §4) | C-01 |
 | `anyhow` | 1 | hanya di `tui-app` (aturan §4) | C-01 |
 | `async-trait` | 0.1 | trait `Provider`, `Tool`, `Approver`, `DecisionUi` | C-02 |
-| `clap` | 4.5 | parsing CLI `mx` | C-01 |
+| `clap` | 4.5 | parsing CLI `maicli` | C-01 |
 | `toml` | 0.8 | config berlapis + pesan error berbaris | C-11 |
 | `tracing` + `tracing-subscriber` + `tracing-appender` | 0.1/0.3/0.2 | log hanya ke file (`AGENTS.md` §5) | C-01 |
 | `directories` | 6 | path config/sesi lintas platform tanpa hardcode | C-11 |

@@ -6,7 +6,7 @@ perubahan yang memutus API harus menaikkan versi major dan dicatat di CHANGELOG.
 
 ## Tujuan
 
-Embedder (host, IDE, skrip otomasi) bisa menjalankan satu sesi agent `mx` tanpa
+Embedder (host, IDE, skrip otomasi) bisa menjalankan satu sesi agent `maicli` tanpa
 mengubah `tui-core` dan tanpa TUI. Fokus v1: **satu sesi per proses**, event dua
 tingkat, kontrol abort/pause/model, dan tool set yang bisa diganti.
 

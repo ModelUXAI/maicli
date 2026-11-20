@@ -122,7 +122,7 @@ mod tests {
     use super::*;
 
     fn temp_file(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-secure-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-secure-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let path = dir.join("file.jsonl");
         std::fs::write(&path, b"{}\n").expect("tulis");
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn file_tidak_ada_dilaporkan_error() {
-        let missing = std::env::temp_dir().join("mx-secure-tidak-ada");
+        let missing = std::env::temp_dir().join("maicli-secure-tidak-ada");
         let _ = std::fs::remove_file(&missing);
         let result = restrict_to_current_user(&missing);
         assert!(result.is_err(), "path tidak ada harus error, bukan diam");
@@ -160,7 +160,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn restrict_unix_menghasilkan_mode_600() {
-        let dir = std::env::temp_dir().join(format!("mx-sec-unix-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-sec-unix-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("r.json");
         std::fs::write(&file, "{}").unwrap();

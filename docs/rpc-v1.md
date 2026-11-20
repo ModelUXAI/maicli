@@ -1,8 +1,8 @@
-# Protokol RPC v1 (`mx --mode rpc`)
+# Protokol RPC v1 (`maicli --mode rpc`)
 
 Transport: satu objek JSON per baris. Klien menulis ke **stdin**, server menulis ke
 **stdout**. stderr dipakai log/kesalahan proses, bukan protokol. Versi diumumkan di
-frame `ready` sebagai `mx-rpc/1`.
+frame `ready` sebagai `maicli-rpc/1`.
 
 Mode ini adalah pengecualian terdokumentasi (stdout untuk protokol);
 log tetap ke file lewat `tracing`.

@@ -528,9 +528,9 @@ pub fn default_global_path() -> Option<PathBuf> {
     })
 }
 
-/// Path config proyek: `<cwd>/.mx/config.toml`.
+/// Path config proyek: `<cwd>/.maicli/config.toml`.
 pub fn default_project_path(cwd: &Path) -> PathBuf {
-    cwd.join(".mx").join("config.toml")
+    cwd.join(".maicli").join("config.toml")
 }
 
 /// Ubah satu nilai config global (`a.b.c = value`) tanpa menghapus key lain.
@@ -742,7 +742,7 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("mx-config-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("maicli-config-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1133,9 +1133,9 @@ mod tests {
     fn kunci_tidak_akan_ditampilkan() {
         let dir = temp_dir("redaction");
         let path = dir.join("c.toml");
-        std::fs::write(&path, "[gateway]\napi_key_env = \"MX_TEST_KEY\"\n").unwrap();
+        std::fs::write(&path, "[gateway]\napi_key_env = \"MAICLI_TEST_KEY\"\n").unwrap();
         let loaded = load(None, Some(&path)).unwrap();
-        assert_eq!(loaded.config.gateway.api_key_env, "MX_TEST_KEY");
+        assert_eq!(loaded.config.gateway.api_key_env, "MAICLI_TEST_KEY");
         assert_eq!(
             loaded.api_key_from(|_| Some("kunci-rahasia-123".to_string())),
             Some("kunci-rahasia-123".to_string())

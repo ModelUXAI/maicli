@@ -503,8 +503,12 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
                     continue;
                 };
                 let dir = boot.sessions_dir.clone();
-                match crate::session_open::fork_current(current, dir, "sesi mx (fork)".to_string())
-                    .await
+                match crate::session_open::fork_current(
+                    current,
+                    dir,
+                    "sesi maicli (fork)".to_string(),
+                )
+                .await
                 {
                     Ok((new_store, messages)) => {
                         let path = new_store.path().display().to_string();
