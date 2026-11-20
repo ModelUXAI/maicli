@@ -28,6 +28,9 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   store sesi di mode teks, TUI, dan RPC tidak lagi menjalankan fs sinkron di dalam future (§4).
 
 ### Added
+- **Sistem GitHub**: workflow CI (matriks Linux+Windows, gerbang penuh) + Release
+  otomatis dari tag v* (build 3 platform + catatan dari CHANGELOG) + LICENSE
+  MIT + CONTRIBUTING + SECURITY + panduan setup.
 - **Packaging Linux x64**: `mx-0.1.0-linux-x64.tar.gz` (release + strip, 3,8 MB).
 - **kill-tree POSIX**: child = leader proses group (`process_group(0)`) + `kill -9 -- -pgid`
   (tanpa unsafe); test pohon 2 level di Linux nyata.

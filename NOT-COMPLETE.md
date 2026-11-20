@@ -82,7 +82,7 @@ Status saat audit: **463 test + 1 doc-test hijau** (`check.ps1`), 59 berkas /
 |---|---|
 | **UAT U-01..U-12** (`docs/uat-v1.md`) | ⬜ kolom hasil kosong |
 | Verifikasi visual V-01/V-03 + angka C-09 (latensi, scroll) | ⬜ butuh mata manusia |
-| `git init` + tag (O-8) | ⬜ folder bukan repo git |
+| ~~git init + tag (O-8)~~ ✅ **2026-11-20**: commit awal `b3372fd` (131 berkas, 40.870 baris) + **tag v0.1.0**; sistem CI/CD (ci.yml matriks + release.yml) + LICENSE/CONTRIBUTING/SECURITY + panduan `docs/setup-github.md`; **push ke GitHub = langkah iqbal** (butuh repo remote) |
 | Amandemen formal `RENCANA.md` C-12 + `AGENTS.md` §0.4 (usulan teks di WORK A-51) | ⬜ menunggu iqbal |
 | Keputusan `/resume` (pertahankan atau ubah jadi pembuka sesi) | ⬜ WORK pertanyaan terbuka #4 |
 | **Rotasi kunci API** yang terekspos di chat | ⬜ **penting — lakukan** |

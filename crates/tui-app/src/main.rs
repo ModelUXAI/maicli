@@ -13,6 +13,7 @@ mod relay_mode;
 mod rpc_mode;
 mod serve_mode;
 mod session_open;
+mod setup_wizard;
 mod text_mode;
 mod tui_mode;
 mod usage;
@@ -329,6 +330,16 @@ async fn main() -> ExitCode {
     }
 
     let Some(api_key) = loaded.api_key() else {
+        // First-run: wizard setup interaktif (pilih provider → kunci ke keyring →
+        // pilih model) — bukan keluar dengan E_KEY_MISSING. Mode non-TTY (rpc
+        // dijalankan dari automation, serve dari script) tetap pesan singkat.
+        if matches!(args.mode, cli::Mode::Tui | cli::Mode::Text) && !args.prompt.is_some() {
+            if let Err(err) = setup_wizard::jalankan().await {
+                eprintln!("{}: {}", err.code, err.message);
+                return ExitCode::from(1);
+            }
+            return ExitCode::SUCCESS; // jalankan ulang `mx` memakai config baru
+        }
         let code = tui_wire::ErrorCode::KeyMissing;
         eprintln!("{code}: {}", code.user_message());
         eprintln!(
