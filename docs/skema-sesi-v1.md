@@ -87,7 +87,7 @@ sebelum v1 dirilis.
 | pohon | `activeLeafId` | `parent_id` per entry |
 | backend | File/Memory/SQL/Redis | File saja |
 
-Impor sesi omp v3 = pekerjaan M4 (`RENCANA-FULL-RUST.md` §8), bukan bagian v1.
+Impor sesi omp v3 = di luar v1 (didokumentasikan sebagai pekerjaan lanjutan).
 ## Kompatibilitas versi
 
 - Header menyimpan `version` (saat ini `1`).

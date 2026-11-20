@@ -13,3 +13,15 @@ relay-key
 dist/
 *.tar.gz
 *.zip
+
+# ============ dokumen/folder kerja internal (tidak dirilis) ============
+# Log bukti kerja, daftar sisa, rencana internal, dan catatan setup pribadi
+# disimpan LOKAL saja — publik melihat README + dokumentasi produk.
+/WORK.md
+/NOT-COMPLETE.md
+/AGENTS.md
+/docs/paritas.md
+/docs/setup-github.md
+/docs/uat-v1.md
+/docs/platform-dan-integrasi.md
+/docs/fase-0/

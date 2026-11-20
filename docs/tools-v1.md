@@ -1,4 +1,4 @@
-# Tool v1 — skema dan contoh (RENCANA C-04)
+# Tool v1 — skema dan contoh
 
 Delapan tool yang teregistrasi di `ToolRegistry::v1()`. Semua panggilan melewati
 gate approval C-05 (tier menentukan perilaku); `concurrency = shared` berarti tool
@@ -157,7 +157,7 @@ dengan pesan bernama (tidak menggantung).
   `bash` bertier `exec`.
 ## Metadata tampilan (`AgentTool`)
 
-Selain skema wire di atas, setiap tool punya metadata UI (RENCANA C-04 `label`/`loadMode`/`render`)
+Selain skema wire di atas, setiap tool punya metadata UI (`label`/`loadMode`/`render`)
 yang **tidak** dikirim ke gateway:
 
 | Tool | Label | Render |

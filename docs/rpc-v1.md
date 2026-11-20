@@ -4,7 +4,7 @@ Transport: satu objek JSON per baris. Klien menulis ke **stdin**, server menulis
 **stdout**. stderr dipakai log/kesalahan proses, bukan protokol. Versi diumumkan di
 frame `ready` sebagai `mx-rpc/1`.
 
-Mode ini adalah pengecualian terdokumentasi `AGENTS.md` §3 (stdout untuk protokol);
+Mode ini adalah pengecualian terdokumentasi (stdout untuk protokol);
 log tetap ke file lewat `tracing`.
 
 ## Alur
