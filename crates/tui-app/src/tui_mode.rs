@@ -204,6 +204,8 @@ struct Screen {
     input: String,
     status: String,
     model: String,
+    /// Prompt yang menunggu turn selesai (dari `/queue` saat sibuk).
+    queue: Vec<String>,
     pending: Option<PendingApproval>,
     question: Option<PendingQuestion>,
     accent: Color,
@@ -262,6 +264,7 @@ impl Screen {
             input: String::new(),
             status: "siap".to_string(),
             model,
+            queue: Vec::new(),
             pending: None,
             question: None,
             accent,
@@ -372,6 +375,11 @@ impl Screen {
 
     fn apply(&mut self, event: AgentEvent) {
         match event {
+            AgentEvent::ClearTimeline => {
+                // /clear: kosongkan timeline dan kembali ke bawah.
+                self.lines.clear();
+                self.scroll = 0;
+            }
             AgentEvent::AgentStart => {
                 self.turn_state = tui_core::TurnStatus::Streaming;
                 self.busy = true;
@@ -1412,7 +1420,11 @@ fn spawn_worker(
     let (tx, mut rx) = unbounded_channel::<Command>();
     tokio::spawn(async move {
         let ask_for_switch = questions.clone();
+        let approvals_pulih = approvals.clone();
         let ctx = tool_context_for(&boot, questions);
+        let skills_ringkas = tui_tools::skills::ringkas_daftar(&boot.skills);
+        let mut effort_aktif: Option<String> = None;
+        let mut force_aktif = false;
         let approval_timeout = Duration::from_secs(boot.limits.approval_timeout_secs);
         let approver: Arc<dyn Approver> = match build_approver(
             boot.approval.clone(),
@@ -1510,6 +1522,9 @@ fn spawn_worker(
                         session_path: session_path.as_deref(),
                         known_models: &boot.models,
                         sessions_dir: Some(&boot.sessions_dir),
+                        skills_ringkas: skills_ringkas.as_str(),
+                        context_window: Some(boot.limits.context_window_tokens),
+                        effort: effort_aktif.as_deref(),
                     };
                     match dispatch(&text, &context) {
                         CommandResult::Quit => {
@@ -1641,6 +1656,51 @@ fn spawn_worker(
                             approver_for_switch.forget_grants();
                             let _ = events_tx.send(AgentEvent::Notice {
                                 text: "grant approval dihapus (file grants.json dikosongkan)"
+                                    .to_string(),
+                            });
+                            continue;
+                        }
+                        CommandResult::ClearScreen => {
+                            // Timeline ada di loop utama — worker meneruskan event.
+                            let _ = events_tx.send(AgentEvent::ClearTimeline);
+                            continue;
+                        }
+                        CommandResult::SetEffort(effort) => {
+                            session.set_effort(effort.clone());
+                            effort_aktif = effort.clone();
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: match effort {
+                                    Some(e) => format!("effort: {e}"),
+                                    None => "effort: default gateway".to_string(),
+                                },
+                            });
+                            continue;
+                        }
+                        CommandResult::SetContextWindow(window) => {
+                            match window {
+                                Some(w) => {
+                                    session.set_context_window(w);
+                                    let _ = events_tx.send(AgentEvent::Notice {
+                                        text: format!("window konteks: {w} token (extended)"),
+                                    });
+                                }
+                                None => {
+                                    session.set_context_window(boot.limits.context_window_tokens);
+                                    let _ = events_tx.send(AgentEvent::Notice {
+                                        text: "window konteks: kembali ke config".to_string(),
+                                    });
+                                }
+                            }
+                            continue;
+                        }
+                        CommandResult::ForceOnce => {
+                            // Yolo satu turn: approver selalu-izin; pulihkan saat AgentEnd.
+                            session.set_approver(Arc::new(tui_approval::FixedApprover::new(
+                                tui_approval::Decision::Always,
+                            )));
+                            force_aktif = true;
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: "force: turn berikutnya tanpa approval (pulih otomatis)"
                                     .to_string(),
                             });
                             continue;
@@ -1824,6 +1884,8 @@ fn spawn_worker(
                         .await;
                     }
                     let token = session.cancel_token();
+                    // Blok membatasi masa hidup borrow `run` (pulih approval
+                    // butuh &mut session SETELAH turn selesai).
                     {
                         let mut run = std::pin::pin!(session.run_turn(Some(text)));
                         loop {
@@ -1842,10 +1904,7 @@ fn spawn_worker(
                                         token.cancel();
                                     }
                                     Command::Prompt(text) => {
-                                        let wants_quit = matches!(
-                                            text.trim(),
-                                            "/quit" | "/exit"
-                                        );
+                                        let wants_quit = matches!(text.trim(), "/quit" | "/exit");
                                         if wants_quit {
                                             token.cancel();
                                             let _ = events_tx.send(AgentEvent::Notice {
@@ -1853,14 +1912,31 @@ fn spawn_worker(
                                             });
                                         } else {
                                             let _ = events_tx.send(AgentEvent::Notice {
-                                                text: "masih sibuk; kirim ulang setelah turn ini selesai"
-                                                    .to_string(),
+                                                text: "masih sibuk; kirim ulang setelah turn ini selesai".to_string(),
                                             });
                                         }
                                     }
                                 },
                             }
                         }
+                    }
+                    // Pulihkan approval setelah yolo satu turn (di luar borrow run).
+                    if force_aktif {
+                        if let Ok(approver_baru) = build_approver(
+                            boot.approval.clone(),
+                            Box::new(ChannelDecisionUi::new(
+                                approvals_pulih.clone(),
+                                approval_timeout,
+                            )),
+                            boot.grants_path.clone(),
+                            boot.grant_ttl,
+                        ) {
+                            session.set_approver(Arc::new(approver_baru));
+                        }
+                        force_aktif = false;
+                        let _ = events_tx.send(AgentEvent::Notice {
+                            text: "force selesai: approval kembali ke kebijakan".to_string(),
+                        });
                     }
                     for record in session.take_compactions() {
                         crate::session_open::append(
@@ -2421,7 +2497,19 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
             ) {
                 last_delta_at = Some(std::time::Instant::now());
             }
+            let turn_selesai = matches!(&event, AgentEvent::AgentEnd { .. });
             screen.apply(event);
+            // Antrean /queue: jalankan prompt berikutnya setelah turn selesai.
+            if turn_selesai
+                && !screen.queue.is_empty()
+                && screen.pending.is_none()
+                && screen.question.is_none()
+            {
+                let berikut = screen.queue.remove(0);
+                screen.push_line(timeline_label(&berikut));
+                screen.busy = true;
+                let _ = commands.send(Command::Prompt(berikut));
+            }
         }
         while let Ok(pending) = approvals_rx.try_recv() {
             screen.show_pending(pending);
@@ -2707,7 +2795,61 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
                     screen.busy = false;
                     continue;
                 }
+                // /hub → buka Agent Hub (sama dengan Alt+A).
+                if text.trim() == "/hub" {
+                    screen.push_line(timeline_label(&text));
+                    screen.hub = Some(HubPanel {
+                        selected: 0,
+                        mode: HubMode::Lihat,
+                        input: String::new(),
+                        tampilan: HubTampilan::Event,
+                        broadcast: false,
+                    });
+                    screen.busy = false;
+                    continue;
+                }
+                // /queue → tampilkan prompt yang menunggu di antrean.
+                if text.trim() == "/queue" {
+                    screen.push_line(timeline_label(&text));
+                    let tampil: Vec<String> = screen
+                        .queue
+                        .iter()
+                        .enumerate()
+                        .map(|(i, q)| format!("[antrean] {}. {q}", i + 1))
+                        .collect();
+                    if tampil.is_empty() {
+                        screen.push_line("[antrean] kosong".to_string());
+                    } else {
+                        for baris in tampil {
+                            screen.push_line(baris);
+                        }
+                    }
+                    screen.busy = false;
+                    continue;
+                }
+                // /retry → kirim ulang prompt terakhir.
+                if text.trim() == "/retry" {
+                    screen.push_line(timeline_label(&text));
+                    match screen.history.last() {
+                        Some(p) => {
+                            let ulang = p.clone();
+                            screen.push_line(timeline_label(&ulang));
+                            screen.busy = true;
+                            let _ = commands.send(Command::Prompt(ulang));
+                        }
+                        None => {
+                            screen.push_line("[retry] belum ada prompt di sesi ini".to_string())
+                        }
+                    }
+                    continue;
+                }
                 screen.push_line(timeline_label(&text));
+                // Saat sibuk: antrekan (dijalankan otomatis setelah AgentEnd).
+                if screen.busy {
+                    screen.queue.push(text);
+                    screen.push_line("[antrean] menunggu turn selesai (lihat /queue)".to_string());
+                    continue;
+                }
                 screen.busy = true;
                 let _ = commands.send(Command::Prompt(text));
             }
@@ -4474,6 +4616,16 @@ provider "uji-cat2" {
         assert!(screen.lines[0].contains("7 pesan"));
         assert!(screen.current.is_empty());
         assert_eq!(screen.scroll, 0);
+    }
+
+    #[test]
+    fn clear_timeline_event_kosongkan_lines() {
+        let mut layar = screen();
+        layar.push_line("satu".to_string());
+        layar.push_line("dua".to_string());
+        layar.apply(AgentEvent::ClearTimeline);
+        assert!(layar.lines.is_empty(), "clear harus mengosongkan timeline");
+        assert_eq!(layar.scroll, 0);
     }
 
     #[test]

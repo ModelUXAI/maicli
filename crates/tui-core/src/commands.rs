@@ -20,6 +20,12 @@ pub struct CommandContext<'a> {
     pub known_models: &'a [String],
     /// Direktori sesi (untuk `/tree`); None = tidak tersedia.
     pub sessions_dir: Option<&'a Path>,
+    /// Ringkasan skill aktif (untuk `/skills`); kosong = tidak ada skill.
+    pub skills_ringkas: &'a str,
+    /// Window konteks dari config (untuk `/extended-context`).
+    pub context_window: Option<u64>,
+    /// Tingkat penalaran aktif (untuk `/effort` tanpa argumen).
+    pub effort: Option<&'a str>,
 }
 
 /// Hasil eksekusi satu baris input.
@@ -55,6 +61,14 @@ pub enum CommandResult {
     Tree,
     /// Hapus semua grant approval yang diingat.
     ForgetApprovals,
+    /// Bersihkan layar timeline (UI).
+    ClearScreen,
+    /// Set tingkat penalaran (`low`/`medium`/`high`); `None` = default gateway.
+    SetEffort(Option<String>),
+    /// Set window konteks token (Some = extended; None = kembali config).
+    SetContextWindow(Option<u64>),
+    /// Aktifkan yolo hanya untuk turn berikutnya.
+    ForceOnce,
     /// Tampilkan daftar provider (tanpa argumen) atau ganti provider aktif.
     SetProvider(Option<String>),
     /// Keluar dari sesi.
@@ -201,6 +215,41 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &[],
         description: "daftar atau ganti provider gateway",
         allow_args: true,
+    },
+    CommandSpec {
+        name: "clear",
+        usage: "",
+        aliases: &["cls"],
+        description: "bersihkan layar timeline",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "skills",
+        usage: "",
+        aliases: &[],
+        description: "daftar skill aktif",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "effort",
+        usage: "[low|medium|high]",
+        aliases: &[],
+        description: "tingkat penalaran model (tanpa argumen = lihat sekarang)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "extended-context",
+        usage: "[on|off]",
+        aliases: &["extctx"],
+        description: "pakai window konteks besar (on) atau kembali ke config (off)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "force",
+        usage: "",
+        aliases: &["yolo"],
+        description: "turn berikutnya berjalan tanpa approval (sekali)",
+        allow_args: false,
     },
     CommandSpec {
         name: "forget-approvals",
@@ -393,6 +442,34 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
             }
         }
         "help" => CommandResult::Reply(help_text()),
+        "clear" | "cls" => CommandResult::ClearScreen,
+        "skills" => CommandResult::Reply(if ctx.skills_ringkas.is_empty() {
+            "tidak ada skill aktif (buat folder skills/<nama>/SKILL.md)".to_string()
+        } else {
+            ctx.skills_ringkas.to_string()
+        }),
+        "effort" => match argument.as_str() {
+            "" => CommandResult::Reply(match ctx.effort {
+                Some(e) => format!("effort aktif: {e}"),
+                None => "effort: default gateway".to_string(),
+            }),
+            "low" | "medium" | "high" => CommandResult::SetEffort(Some(argument)),
+            lain => CommandResult::Reply(format!(
+                "effort '{lain}' tidak dikenal; pilihan: low, medium, high (atau kosong = default)"
+            )),
+        },
+        "extended-context" | "extctx" => match argument.as_str() {
+            "on" => CommandResult::SetContextWindow(Some(400_000)),
+            "off" => CommandResult::SetContextWindow(ctx.context_window),
+            "" => CommandResult::Reply(match ctx.context_window {
+                Some(w) => format!(
+                    "window konteks config: {w} token (/extended-context on = pakai 400.000)"
+                ),
+                None => "window konteks tidak dibatasi config".to_string(),
+            }),
+            lain => CommandResult::Reply(format!("argumen '{lain}' tidak dikenal; pakai on / off")),
+        },
+        "force" | "yolo" => CommandResult::ForceOnce,
         "model" => {
             if argument.is_empty() {
                 let mut text = format!("model aktif: {}", ctx.model);
@@ -476,6 +553,9 @@ mod tests {
             session_path: session,
             known_models: &[],
             sessions_dir: None,
+            skills_ringkas: "",
+            context_window: None,
+            effort: None,
         }
     }
 
@@ -621,6 +701,9 @@ mod tests {
             session_path: None,
             known_models: known,
             sessions_dir: None,
+            skills_ringkas: "",
+            context_window: None,
+            effort: None,
         }
     }
 
@@ -689,7 +772,7 @@ mod tests {
         assert_eq!(model.display(), "/model [id]");
         let compact = find_command("compact").expect("compact ada");
         assert!(!compact.allow_args);
-        assert_eq!(COMMANDS.len(), 19, "jumlah command harus cocok dokumen");
+        assert_eq!(COMMANDS.len(), 24, "jumlah command harus cocok dokumen");
         for spec in COMMANDS {
             assert!(
                 !spec.description.is_empty(),
@@ -854,6 +937,56 @@ mod tests {
         assert_eq!(
             dispatch("/resume", &ctx("m", &tools, None)),
             CommandResult::Resume
+        );
+    }
+
+    #[test]
+    fn clear_skills_effort_extctx_force_dikenali() {
+        let tools = Vec::new();
+        assert_eq!(
+            dispatch("/clear", &ctx("m", &tools, None)),
+            CommandResult::ClearScreen
+        );
+        assert_eq!(
+            dispatch("/cls", &ctx("m", &tools, None)),
+            CommandResult::ClearScreen
+        );
+        assert_eq!(
+            dispatch("/skills", &ctx("m", &tools, None)),
+            CommandResult::Reply(
+                "tidak ada skill aktif (buat folder skills/<nama>/SKILL.md)".to_string()
+            )
+        );
+        assert_eq!(
+            dispatch("/effort", &ctx("m", &tools, None)),
+            CommandResult::Reply("effort: default gateway".to_string())
+        );
+        assert_eq!(
+            dispatch("/effort high", &ctx("m", &tools, None)),
+            CommandResult::SetEffort(Some("high".to_string()))
+        );
+        assert!(
+            matches!(
+                dispatch("/effort gila", &ctx("m", &tools, None)),
+                CommandResult::Reply(_)
+            ),
+            "effort tak dikenal = pesan, bukan set"
+        );
+        assert_eq!(
+            dispatch("/extended-context on", &ctx("m", &tools, None)),
+            CommandResult::SetContextWindow(Some(400_000))
+        );
+        assert_eq!(
+            dispatch("/extctx off", &ctx("m", &tools, None)),
+            CommandResult::SetContextWindow(None)
+        );
+        assert_eq!(
+            dispatch("/force", &ctx("m", &tools, None)),
+            CommandResult::ForceOnce
+        );
+        assert_eq!(
+            dispatch("/yolo", &ctx("m", &tools, None)),
+            CommandResult::ForceOnce
         );
     }
 

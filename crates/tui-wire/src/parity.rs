@@ -15,6 +15,8 @@ use crate::event::{AgentEvent, ProviderEvent};
 pub fn normalize(event: &AgentEvent) -> Option<String> {
     match event {
         AgentEvent::AgentStart => Some("agent_start".to_string()),
+        // Perintah UI murni — tidak relevan untuk parity transkrip.
+        AgentEvent::ClearTimeline => None,
         AgentEvent::AgentEnd { turns } => Some(format!("agent_end:{turns}")),
         AgentEvent::TurnStart { index } => Some(format!("turn_start:{index}")),
         AgentEvent::TurnEnd { index } => Some(format!("turn_end:{index}")),

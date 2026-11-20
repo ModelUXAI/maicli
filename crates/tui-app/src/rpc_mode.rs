@@ -1279,6 +1279,7 @@ async fn run_with_session(
                     .iter()
                     .map(|t| t.to_string())
                     .collect();
+                let skills_ringkas = tui_tools::skills::ringkas_daftar(&boot.skills);
                 let context = tui_core::CommandContext {
                     model: session.model(),
                     provider: (&boot.provider.0, &boot.provider.1),
@@ -1286,6 +1287,9 @@ async fn run_with_session(
                     session_path: store.as_ref().map(|s| s.path()),
                     known_models: &boot.models,
                     sessions_dir: Some(&boot.sessions_dir),
+                    skills_ringkas: skills_ringkas.as_str(),
+                    context_window: Some(boot.limits.context_window_tokens),
+                    effort: session.effort(),
                 };
                 let hasil = tui_core::dispatch(&text, &context);
                 match &hasil {

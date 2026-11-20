@@ -46,6 +46,8 @@ pub struct TurnSettings {
     pub max_tokens: Option<u32>,
     /// Deadline satu turn (bukan per panggilan).
     pub deadline: Option<Duration>,
+    /// Tingkat penalaran (low/medium/high); dikirim ke gateway bila Some.
+    pub effort: Option<String>,
 }
 
 impl Default for TurnSettings {
@@ -55,6 +57,7 @@ impl Default for TurnSettings {
             system_prompt: SYSTEM_PROMPT.to_string(),
             max_tokens: None,
             deadline: Some(Duration::from_secs(900)),
+            effort: None,
         }
     }
 }
@@ -206,6 +209,21 @@ impl AgentSession {
     /// Ganti model sesi (dipakai `/model`).
     pub fn set_model(&mut self, model: impl Into<String>) {
         self.settings.model = model.into();
+    }
+
+    /// Set tingkat penalaran (`low`/`medium`/`high`); `None` = default gateway.
+    pub fn set_effort(&mut self, effort: Option<String>) {
+        self.settings.effort = effort;
+    }
+
+    /// Ganti approver (dipakai `/force`: yolo satu turn lalu pulih).
+    pub fn set_approver(&mut self, approver: Arc<dyn Approver>) {
+        self.approver = approver;
+    }
+
+    /// Tingkat penalaran aktif.
+    pub fn effort(&self) -> Option<&str> {
+        self.settings.effort.as_deref()
     }
 
     /// Minta turn yang sedang berjalan berhenti (tool + streaming).
@@ -379,6 +397,7 @@ impl AgentSession {
             messages: request_messages,
             tools: Vec::new(),
             max_tokens: Some(2_048),
+            reasoning_effort: None,
         };
         let mut receiver = match self.provider.stream_chat(request).await {
             Ok(receiver) => receiver,
@@ -925,6 +944,7 @@ impl AgentSession {
             messages,
             tools: self.tools.definitions(),
             max_tokens: self.fit_output_tokens(),
+            reasoning_effort: self.settings.effort.clone(),
         }
     }
 }

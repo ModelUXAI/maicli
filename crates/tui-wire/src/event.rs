@@ -81,6 +81,8 @@ pub struct SessionChoice {
 pub enum AgentEvent {
     /// Turn pertama dimulai.
     AgentStart,
+    /// Bersihkan timeline UI (balasan `/clear`).
+    ClearTimeline,
     /// Satu turn dimulai.
     TurnStart {
         /// Nomor turn, mulai 1.

@@ -58,6 +58,8 @@ pub struct ChatRequest {
     pub tools: Vec<ToolDefinition>,
     /// Batas token output.
     pub max_tokens: Option<u32>,
+    /// Tingkat penalaran (`low`/`medium`/`high`); dikirim bila Some.
+    pub reasoning_effort: Option<String>,
 }
 
 impl ChatRequest {
@@ -68,6 +70,7 @@ impl ChatRequest {
             messages,
             tools: Vec::new(),
             max_tokens: None,
+            reasoning_effort: None,
         }
     }
 }
@@ -193,6 +196,9 @@ impl OpenAiCompatClient {
         }
         if let Some(max_tokens) = request.max_tokens {
             body["max_tokens"] = json!(max_tokens);
+        }
+        if let Some(effort) = &request.reasoning_effort {
+            body["reasoning_effort"] = json!(effort);
         }
         body
     }

@@ -28,6 +28,11 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   store sesi di mode teks, TUI, dan RPC tidak lagi menjalankan fs sinkron di dalam future (§4).
 
 ### Added
+- **7 command baru** (kelompok kecil audit omp): `/clear`, `/retry`,
+  `/skills`, `/hub`, `/queue` (antrean prompt saat sibuk, otomatis dijalankan
+  setelah turn selesai), `/extended-context on|off`, `/force` (yolo satu turn,
+  approval pulih otomatis); **`/effort low|medium|high`** dikirim sebagai
+  `reasoning_effort` ke gateway.
 - **Wizard setup awal (first-run)**: tanpa kunci → pilih provider → kunci tersembunyi
   → keyring → discovery model → config tertulis; jalan di Windows/Linux.
 - **Sistem GitHub**: workflow CI (matriks Linux+Windows, gerbang penuh) + Release

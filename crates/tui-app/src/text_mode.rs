@@ -361,6 +361,9 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
     let printer = tokio::spawn(print_events(rx));
     let registry = boot.tool_registry();
     let tool_names = registry.names();
+    let skills_ringkas = tui_tools::skills::ringkas_daftar(&boot.skills);
+    let mut effort_aktif: Option<String> = None;
+    let mut force_aktif = false;
     let approver = approver_for(&boot)?;
     let (ask_tx, mut ask_rx) = unbounded_channel::<AskRequest>();
     let events_for_switch = tx.clone();
@@ -448,6 +451,9 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
             session_path: session_path.as_deref(),
             known_models: &boot.models,
             sessions_dir: Some(&boot.sessions_dir),
+            skills_ringkas: skills_ringkas.as_str(),
+            context_window: Some(boot.limits.context_window_tokens),
+            effort: effort_aktif.as_deref(),
         };
         match dispatch(&text, &context) {
             CommandResult::Quit => break,
@@ -534,6 +540,45 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
             CommandResult::ForgetApprovals => {
                 approver_for_switch.forget_grants();
                 println!("grant approval dihapus (file grants.json dikosongkan)");
+                continue;
+            }
+            CommandResult::ClearScreen => {
+                // ANSI: clear layar + home cursor (jalur teks didokumentasikan).
+                print!("\x1b[2J\x1b[H");
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                continue;
+            }
+            CommandResult::SetEffort(effort) => {
+                session.set_effort(effort.clone());
+                println!(
+                    "{}",
+                    match &effort {
+                        Some(e) => format!("effort: {e}"),
+                        None => "effort: default gateway".to_string(),
+                    }
+                );
+                effort_aktif = effort;
+                continue;
+            }
+            CommandResult::SetContextWindow(window) => {
+                match window {
+                    Some(w) => {
+                        session.set_context_window(w);
+                        println!("window konteks: {w} token (extended)");
+                    }
+                    None => {
+                        session.set_context_window(boot.limits.context_window_tokens);
+                        println!("window konteks: kembali ke config");
+                    }
+                }
+                continue;
+            }
+            CommandResult::ForceOnce => {
+                session.set_approver(Arc::new(tui_approval::FixedApprover::new(
+                    tui_approval::Decision::Always,
+                )));
+                force_aktif = true;
+                println!("force: turn berikutnya tanpa approval (pulih otomatis)");
                 continue;
             }
             CommandResult::SetProvider(Some(id)) => {
@@ -653,6 +698,12 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
             &mut queued,
         )
         .await;
+        if force_aktif {
+            // Yolo satu turn: pulihkan kebijakan approval setelah turn selesai.
+            session.set_approver(approver_for(&boot)?);
+            force_aktif = false;
+            println!("force selesai: approval kembali ke kebijakan");
+        }
         match turn {
             Ok(outcome) => println!("\n[{} turn, {:?}]", outcome.turns, outcome.stop_reason),
             Err(err) => println!("\n{}: {}", err.code, err.message),
