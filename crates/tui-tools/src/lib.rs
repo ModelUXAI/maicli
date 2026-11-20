@@ -166,6 +166,11 @@ impl ToolRegistry {
         }
     }
 
+    /// Arc daftar todo (dipakai mode untuk mengubah daftar dari UI).
+    pub fn todo_arc(&self) -> Arc<std::sync::Mutex<Vec<String>>> {
+        Arc::clone(&self.todos)
+    }
+
     /// Definisi semua tool, berurutan.
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         self.tools.iter().map(|tool| tool.definition()).collect()

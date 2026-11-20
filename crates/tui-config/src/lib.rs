@@ -603,6 +603,66 @@ pub fn set_global_value(path: &Path, key: &str, raw: &str) -> Result<(), MxError
         .map_err(|e| config_error(path, &format!("gagal membatasi izin: {e}")))
 }
 
+/// Hapus satu kunci dari config global (dipakai `/mcp remove`).
+///
+/// `Ok(false)` = key tidak ada (tidak apa-apa); `Ok(true)` = terhapus.
+/// File ditulis ulang dengan validasi ketat yang sama seperti `set_global_value`.
+pub fn remove_global_value(path: &Path, key: &str) -> Result<bool, MxError> {
+    let existing = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(config_error(path, &format!("tidak bisa dibaca: {err}"))),
+    };
+    if existing.trim().is_empty() {
+        return Ok(false);
+    }
+    let mut table: toml::Value =
+        toml::from_str(&existing).map_err(|e| config_error(path, &e.to_string()))?;
+    let segments: Vec<&str> = key.split('.').filter(|s| !s.is_empty()).collect();
+    if segments.len() < 2 {
+        return Err(MxError::new(
+            ErrorCode::Config,
+            format!("key '{key}' harus berbentuk bagian.nama"),
+        ));
+    }
+    let root = table
+        .as_table_mut()
+        .ok_or_else(|| config_error(path, "isi config bukan tabel TOML"))?;
+    let mut current = root;
+    for segment in &segments[..segments.len() - 1] {
+        current = match current.get_mut(*segment) {
+            Some(toml::Value::Table(t)) => t,
+            _ => return Ok(false), // jalur induk tidak ada → key memang tidak ada
+        };
+    }
+    if current.remove(segments[segments.len() - 1]).is_none() {
+        return Ok(false);
+    }
+    let text = toml::to_string_pretty(&table)
+        .map_err(|e| config_error(path, &format!("tidak bisa diserialisasi: {e}")))?;
+    let parsed: Config = toml::from_str(&text).map_err(|e| {
+        if e.message().starts_with("unknown field") {
+            MxError::new(
+                ErrorCode::Config,
+                format!("kunci config tidak dikenal: {}", e.message()),
+            )
+        } else {
+            config_error(path, &e.to_string())
+        }
+    })?;
+    parsed
+        .ui
+        .validate()
+        .map_err(|detail| MxError::new(ErrorCode::Config, detail))?;
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, text.as_bytes()).map_err(|e| config_error(path, &e.to_string()))?;
+    let _ = std::fs::remove_file(path);
+    std::fs::rename(&tmp, path).map_err(|e| config_error(path, &e.to_string()))?;
+    tui_wire::secure_file::restrict_to_current_user(path)
+        .map_err(|e| config_error(path, &format!("gagal membatasi izin: {e}")))?;
+    Ok(true)
+}
+
 fn typed_value(raw: &str) -> toml::Value {
     if let Ok(flag) = raw.parse::<bool>() {
         return toml::Value::Boolean(flag);

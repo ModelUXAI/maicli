@@ -28,6 +28,12 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   store sesi di mode teks, TUI, dan RPC tidak lagi menjalankan fs sinkron di dalam future (§4).
 
 ### Added
+- **Kelompok 2 (audit omp)**: `/stats`, `/changelog`, `/setup` +
+  **`maicli --setup`** (wizard kapan pun), `/settings`, `/logout` (hapus kunci
+  keyring), `/mcp list|remove <id>` (hapus = tulis ulang config global dengan
+  validasi ketat), `/export [berkas]` (transkrip Markdown), `/handoff`
+  (ringkas + instruksi sesi baru), `/commit` (prompt khusus; approval git tetap
+  berjalan), `/todo add|rm <no>|done <no>|clear`.
 - **7 command baru** (kelompok kecil audit omp): `/clear`, `/retry`,
   `/skills`, `/hub`, `/queue` (antrean prompt saat sibuk, otomatis dijalankan
   setelah turn selesai), `/extended-context on|off`, `/force` (yolo satu turn,

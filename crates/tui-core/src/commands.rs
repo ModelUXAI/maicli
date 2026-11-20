@@ -69,6 +69,28 @@ pub enum CommandResult {
     SetContextWindow(Option<u64>),
     /// Aktifkan yolo hanya untuk turn berikutnya.
     ForceOnce,
+    /// Tampilkan CHANGELOG (bagian teratas).
+    Changelog,
+    /// Tampilkan statistik sesi.
+    Stats,
+    /// Jalankan ulang wizard setup.
+    Setup,
+    /// Buka config global di $EDITOR.
+    Settings,
+    /// Hapus kunci provider dari keyring.
+    Logout,
+    /// Daftar server MCP (`remove <id>` dipegang mode karena mengubah config).
+    McpList,
+    /// Hapus server MCP dari config global.
+    McpRemove(String),
+    /// Tulis transkrip sesi ke berkas Markdown (default: maicli-export.md).
+    Export(Option<String>),
+    /// Ringkas sesi sekarang lalu mulai sesi baru berisi ringkasannya.
+    Handoff,
+    /// Minta agen membuat commit git (tetap lewat approval seperti tool lain).
+    Commit,
+    /// Subcommand `/todo add|rm|clear` (penggantian daftar didelegasi mode).
+    TodoSub(char, Option<String>),
     /// Tampilkan daftar provider (tanpa argumen) atau ganti provider aktif.
     SetProvider(Option<String>),
     /// Keluar dari sesi.
@@ -176,10 +198,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "todo",
-        usage: "",
+        usage: "[add <teks>|rm <no>|clear]",
         aliases: &[],
-        description: "daftar todo sesi",
-        allow_args: false,
+        description: "daftar dan kelola todo sesi",
+        allow_args: true,
     },
     CommandSpec {
         name: "new",
@@ -252,6 +274,69 @@ pub const COMMANDS: &[CommandSpec] = &[
         allow_args: false,
     },
     CommandSpec {
+        name: "stats",
+        usage: "",
+        aliases: &[],
+        description: "statistik sesi (pesan, token)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "changelog",
+        usage: "",
+        aliases: &[],
+        description: "CHANGELOG bagian teratas",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "setup",
+        usage: "",
+        aliases: &[],
+        description: "wizard setup ulang (provider, kunci, model)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "settings",
+        usage: "",
+        aliases: &[],
+        description: "buka config global di editor",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "logout",
+        usage: "",
+        aliases: &[],
+        description: "hapus kunci provider dari keyring",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "mcp",
+        usage: "[list|remove <id>]",
+        aliases: &[],
+        description: "kelola server MCP (tanpa argumen = list)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "export",
+        usage: "[berkas]",
+        aliases: &[],
+        description: "tulis transkrip sesi ke berkas Markdown",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "handoff",
+        usage: "",
+        aliases: &[],
+        description: "ringkas sesi lalu mulai sesi baru berisi ringkasannya",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "commit",
+        usage: "",
+        aliases: &[],
+        description: "minta agen membuat commit git dari perubahan saat ini",
+        allow_args: false,
+    },
+    CommandSpec {
         name: "forget-approvals",
         usage: "",
         aliases: &[],
@@ -293,6 +378,37 @@ pub fn help_text() -> String {
     }
     out.push_str("selain itu, teks apa pun dikirim ke model.");
     out
+}
+
+/// Bagian teratas CHANGELOG (dipotong sebelum rilis kedua) untuk `/changelog`.
+pub fn changelog_text() -> String {
+    const SEMUA: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../CHANGELOG.md"));
+    let bagian: Vec<String> = SEMUA
+        .split("## [")
+        .skip(1)
+        .take(2)
+        .map(|s| format!("## [{s}"))
+        .collect();
+    if bagian.is_empty() {
+        return "(CHANGELOG kosong)".to_string();
+    }
+    bagian.join("\n")
+}
+
+/// Teks statistik sesi untuk `/stats`.
+pub fn stats_text(jumlah_pesan: usize, usage: tui_wire::Usage) -> String {
+    format!(
+        "statistik sesi:\n  pesan: {jumlah_pesan}\n  token masuk: {}\n  token keluar: {}",
+        usage.input_tokens, usage.output_tokens
+    )
+}
+
+/// Prompt yang dikirim ke agen untuk `/commit` (approval tetap berjalan).
+pub fn commit_prompt() -> String {
+    "Buat commit git untuk perubahan yang ada sekarang: jalankan `git add -A` dan \
+     `git commit` dengan pesan commit satu baris berbahasa Indonesia yang \
+     merangkum perubahan. Jangan mendorong (push) ke remote."
+        .to_string()
 }
 /// Teks pemakaian token untuk UI.
 pub fn usage_text(
@@ -470,6 +586,25 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
             lain => CommandResult::Reply(format!("argumen '{lain}' tidak dikenal; pakai on / off")),
         },
         "force" | "yolo" => CommandResult::ForceOnce,
+        "stats" => CommandResult::Stats,
+        "changelog" => CommandResult::Changelog,
+        "setup" => CommandResult::Setup,
+        "settings" => CommandResult::Settings,
+        "logout" => CommandResult::Logout,
+        "mcp" => match argument.split_once(char::is_whitespace) {
+            Some(("remove", id)) if !id.trim().is_empty() => {
+                CommandResult::McpRemove(id.trim().to_string())
+            }
+            Some(("list", _)) | None => CommandResult::McpList,
+            _ => CommandResult::Reply("pakai: /mcp list atau /mcp remove <id>".to_string()),
+        },
+        "export" => CommandResult::Export(if argument.is_empty() {
+            None
+        } else {
+            Some(argument)
+        }),
+        "handoff" => CommandResult::Handoff,
+        "commit" => CommandResult::Commit,
         "model" => {
             if argument.is_empty() {
                 let mut text = format!("model aktif: {}", ctx.model);
@@ -498,7 +633,31 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
         "new" => CommandResult::NewSession,
         "fork" => CommandResult::ForkSession,
         "context" => CommandResult::Context,
-        "todo" => CommandResult::Todo,
+        "todo" => {
+            if argument.is_empty() {
+                CommandResult::Todo
+            } else {
+                let (sub, sisa) = argument
+                    .split_once(char::is_whitespace)
+                    .unwrap_or((argument.as_str(), ""));
+                match sub {
+                    "add" if !sisa.trim().is_empty() => {
+                        CommandResult::TodoSub('a', Some(sisa.trim().to_string()))
+                    }
+                    "rm" | "done" => match sisa.trim().parse::<usize>() {
+                        Ok(n) if n >= 1 => CommandResult::TodoSub(
+                            if sub == "rm" { 'r' } else { 'd' },
+                            Some(n.to_string()),
+                        ),
+                        _ => CommandResult::Reply(format!("pakai /todo {sub} <nomor-dari-daftar>")),
+                    },
+                    "clear" => CommandResult::TodoSub('c', None),
+                    lain => CommandResult::Reply(format!(
+                        "subcommand todo '{lain}' tidak dikenal; pakai: add <teks>, rm <no>, clear (atau /todo saja untuk melihat)"
+                    )),
+                }
+            }
+        }
         "title" => {
             if argument.is_empty() {
                 CommandResult::Reply("pakai /title <teks>".to_string())
@@ -772,7 +931,7 @@ mod tests {
         assert_eq!(model.display(), "/model [id]");
         let compact = find_command("compact").expect("compact ada");
         assert!(!compact.allow_args);
-        assert_eq!(COMMANDS.len(), 24, "jumlah command harus cocok dokumen");
+        assert_eq!(COMMANDS.len(), 33, "jumlah command harus cocok dokumen");
         for spec in COMMANDS {
             assert!(
                 !spec.description.is_empty(),
@@ -988,6 +1147,92 @@ mod tests {
             dispatch("/yolo", &ctx("m", &tools, None)),
             CommandResult::ForceOnce
         );
+    }
+
+    #[test]
+    fn kelompok2_command_dikenali() {
+        let tools = Vec::new();
+        assert_eq!(
+            dispatch("/stats", &ctx("m", &tools, None)),
+            CommandResult::Stats
+        );
+        assert_eq!(
+            dispatch("/changelog", &ctx("m", &tools, None)),
+            CommandResult::Changelog
+        );
+        assert_eq!(
+            dispatch("/setup", &ctx("m", &tools, None)),
+            CommandResult::Setup
+        );
+        assert_eq!(
+            dispatch("/settings", &ctx("m", &tools, None)),
+            CommandResult::Settings
+        );
+        assert_eq!(
+            dispatch("/logout", &ctx("m", &tools, None)),
+            CommandResult::Logout
+        );
+        assert_eq!(
+            dispatch("/mcp", &ctx("m", &tools, None)),
+            CommandResult::McpList
+        );
+        assert_eq!(
+            dispatch("/mcp list", &ctx("m", &tools, None)),
+            CommandResult::McpList
+        );
+        assert_eq!(
+            dispatch("/mcp remove klien-a", &ctx("m", &tools, None)),
+            CommandResult::McpRemove("klien-a".to_string())
+        );
+        assert!(matches!(
+            dispatch("/mcp hapus klien-a", &ctx("m", &tools, None)),
+            CommandResult::Reply(_)
+        ));
+        assert_eq!(
+            dispatch("/export", &ctx("m", &tools, None)),
+            CommandResult::Export(None)
+        );
+        assert_eq!(
+            dispatch("/export catatan.md", &ctx("m", &tools, None)),
+            CommandResult::Export(Some("catatan.md".to_string()))
+        );
+        assert_eq!(
+            dispatch("/handoff", &ctx("m", &tools, None)),
+            CommandResult::Handoff
+        );
+        assert_eq!(
+            dispatch("/commit", &ctx("m", &tools, None)),
+            CommandResult::Commit
+        );
+    }
+
+    #[test]
+    fn todo_subcommand_dipetakan() {
+        let tools = Vec::new();
+        assert_eq!(
+            dispatch("/todo", &ctx("m", &tools, None)),
+            CommandResult::Todo
+        );
+        assert_eq!(
+            dispatch("/todo add kerja baru", &ctx("m", &tools, None)),
+            CommandResult::TodoSub('a', Some("kerja baru".to_string()))
+        );
+        assert_eq!(
+            dispatch("/todo rm 2", &ctx("m", &tools, None)),
+            CommandResult::TodoSub('r', Some("2".to_string()))
+        );
+        assert_eq!(
+            dispatch("/todo done 1", &ctx("m", &tools, None)),
+            CommandResult::TodoSub('d', Some("1".to_string()))
+        );
+        assert_eq!(
+            dispatch("/todo clear", &ctx("m", &tools, None)),
+            CommandResult::TodoSub('c', None)
+        );
+        assert!(matches!(
+            dispatch("/todo gila", &ctx("m", &tools, None)),
+            CommandResult::Reply(_)
+        ));
     }
 
     #[test]

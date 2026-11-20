@@ -13,12 +13,33 @@ pub trait SecretBackend {
     fn get(&self, user: &str) -> Option<String>;
     /// Simpan kunci; pesan galat tidak boleh memuat nilainya.
     fn set(&mut self, user: &str, value: &str) -> Result<(), String>;
+    /// Hapus kunci; pesan galat tidak boleh memuat nilainya.
+    fn delete(&mut self, user: &str) -> Result<(), String> {
+        // Backend tanpa dukungan hapus: dianggap berhasil (env tetap menang).
+        let _ = user;
+        Ok(())
+    }
 }
 
 /// Backend keyring OS (Windows Credential Manager di v1).
 pub struct KeyringBackend;
 
 impl SecretBackend for KeyringBackend {
+    #[cfg(windows)]
+    fn delete(&mut self, user: &str) -> Result<(), String> {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, user)
+            .map_err(|e| format!("akses keyring: {e}"))?;
+        entry
+            .delete_credential()
+            .map_err(|e| format!("hapus kunci: {e}"))
+    }
+
+    #[cfg(not(windows))]
+    fn delete(&mut self, _user: &str) -> Result<(), String> {
+        // Linux: kunci tidak pernah disimpan ke keyring (env-only) — tidak ada
+        // yang perlu dihapus; konsisten dengan get/set non-Windows.
+        Ok(())
+    }
     #[cfg(windows)]
     fn get(&self, user: &str) -> Option<String> {
         let entry = keyring::Entry::new(KEYRING_SERVICE, user).ok()?;
@@ -73,6 +94,22 @@ pub fn store_key(
 /// Hanya menyebut sumbernya, tidak pernah nilainya.
 pub fn source(env_name: &str) -> &'static str {
     source_from(|name| std::env::var(name).ok(), keyring_lookup, env_name)
+}
+
+/// Hapus kunci dari keyring (dipakai `/logout`); gagal = error bernama.
+pub fn delete_key(backend: &mut dyn SecretBackend, user: &str) -> Result<(), tui_wire::MxError> {
+    if user.trim().is_empty() {
+        return Err(tui_wire::MxError::new(
+            tui_wire::ErrorCode::Config,
+            "nama kunci (env var) kosong".to_string(),
+        ));
+    }
+    backend.delete(user).map_err(|detail| {
+        tui_wire::MxError::new(
+            tui_wire::ErrorCode::Config,
+            format!("gagal menghapus kunci dari keyring: {detail}"),
+        )
+    })
 }
 
 /// Bentuk yang bisa diuji: sumber ditentukan dari lookup yang disuntikkan.
@@ -141,6 +178,23 @@ mod tests {
             self.value = Some(value.to_string());
             Ok(())
         }
+
+        fn delete(&mut self, _user: &str) -> Result<(), String> {
+            self.value = None;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn delete_key_menghapus_dan_menolak_nama_kosong() {
+        let mut fake = Fake {
+            value: Some("rahasia".to_string()),
+            fail: false,
+        };
+        let err = delete_key(&mut fake, "  ").expect_err("nama kosong ditolak");
+        assert_eq!(err.code, tui_wire::ErrorCode::Config);
+        delete_key(&mut fake, "MODELUXAI_API_KEY").expect("hapus berhasil");
+        assert!(fake.value.is_none(), "kunci harus hilang setelah delete");
     }
 
     #[test]

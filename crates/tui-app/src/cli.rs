@@ -80,6 +80,9 @@ pub struct Cli {
     /// Jangan muat extension eksternal (menimpa config extensions.enabled).
     #[arg(long)]
     pub no_extensions: bool,
+    /// Jalankan wizard setup (pilih provider, kunci, model) lalu keluar.
+    #[arg(long, default_value_t = false)]
+    pub setup: bool,
     /// Tampilkan daftar sesi (opsional difilter judul) lalu keluar.
     #[arg(long, num_args = 0..=1, default_missing_value = "", value_name = "JUDUL")]
     pub list_sessions: Option<String>,

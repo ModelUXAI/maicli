@@ -1479,6 +1479,7 @@ fn spawn_worker(
             )));
         }
         let tool_names = registry.names();
+        let todo_arc = registry.todo_arc();
         let mut session = AgentSession::new(
             Arc::new(boot.client.clone()),
             approver,
@@ -1702,6 +1703,224 @@ fn spawn_worker(
                             let _ = events_tx.send(AgentEvent::Notice {
                                 text: "force: turn berikutnya tanpa approval (pulih otomatis)"
                                     .to_string(),
+                            });
+                            continue;
+                        }
+                        CommandResult::Changelog => {
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: tui_core::commands::changelog_text(),
+                            });
+                            continue;
+                        }
+                        CommandResult::Stats => {
+                            let text = tui_core::commands::stats_text(
+                                session.messages().len(),
+                                session.usage(),
+                            );
+                            let _ = events_tx.send(AgentEvent::Notice { text });
+                            continue;
+                        }
+                        CommandResult::Setup => {
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: "keluar dulu (Ctrl+C dua kali) lalu jalankan: maicli --setup"
+                                    .to_string(),
+                            });
+                            continue;
+                        }
+                        CommandResult::Settings => {
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: format!(
+                                    "config global: {} (buka lewat maicli --setup atau editor)",
+                                    crate::config_root().join("config.toml").display()
+                                ),
+                            });
+                            continue;
+                        }
+                        CommandResult::Logout => {
+                            let env_nama = boot.provider.1.clone();
+                            let hapus = tokio::task::spawn_blocking(move || {
+                                let mut backend = tui_config::secret::KeyringBackend;
+                                tui_config::secret::delete_key(&mut backend, &env_nama)
+                            })
+                            .await;
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: match hapus {
+                                    Ok(Ok(())) => {
+                                        "kunci dihapus dari keyring (env tetap menang bila terisi)"
+                                            .to_string()
+                                    }
+                                    Ok(Err(err)) => format!("logout gagal: {}", err.message),
+                                    Err(e) => format!("logout gagal: {e}"),
+                                },
+                            });
+                            continue;
+                        }
+                        CommandResult::McpList => {
+                            let mut teks = String::from("server MCP:");
+                            if boot.mcp_notes.is_empty() {
+                                teks.push_str(" tidak ada");
+                            } else {
+                                for n in &boot.mcp_notes {
+                                    teks.push_str(&format!("\n  - {n}"));
+                                }
+                            }
+                            let _ = events_tx.send(AgentEvent::Notice { text: teks });
+                            continue;
+                        }
+                        CommandResult::McpRemove(id) => {
+                            let path = crate::config_root().join("config.toml");
+                            let id_ = id.clone();
+                            let hasil = tokio::task::spawn_blocking(move || {
+                                tui_config::remove_global_value(
+                                    &path,
+                                    &format!("mcp.servers.{id_}"),
+                                )
+                            })
+                            .await;
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: match hasil {
+                                    Ok(Ok(true)) => {
+                                        format!("server MCP '{id}' dihapus dari config global (restart agar berlaku)")
+                                    }
+                                    Ok(Ok(false)) => {
+                                        format!("server MCP '{id}' tidak ada di config global")
+                                    }
+                                    Ok(Err(err)) => format!("mcp remove gagal: {}", err.message),
+                                    Err(e) => format!("mcp remove gagal: {e}"),
+                                },
+                            });
+                            continue;
+                        }
+                        CommandResult::Export(basename) => {
+                            let nama = basename.unwrap_or_else(|| "maicli-export.md".to_string());
+                            let mut teks = String::from("# Transkrip maicli\n\n");
+                            for m in session.messages() {
+                                match m {
+                                    tui_wire::Message::User { content } => {
+                                        teks.push_str("## kamu\n\n");
+                                        teks.push_str(content);
+                                        teks.push_str("\n\n");
+                                    }
+                                    tui_wire::Message::Assistant { content, .. } => {
+                                        teks.push_str("## maicli\n\n");
+                                        teks.push_str(
+                                            &content
+                                                .iter()
+                                                .filter_map(|b| b.as_text())
+                                                .collect::<Vec<_>>()
+                                                .join(""),
+                                        );
+                                        teks.push_str("\n\n");
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            let path = std::path::PathBuf::from(&nama);
+                            let tulis =
+                                tokio::task::spawn_blocking(move || std::fs::write(&path, teks))
+                                    .await;
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: match tulis {
+                                    Ok(Ok(())) => format!("transkrip ditulis ke {nama}"),
+                                    Ok(Err(e)) => format!("export gagal: {e}"),
+                                    Err(e) => format!("export gagal: {e}"),
+                                },
+                            });
+                            continue;
+                        }
+                        CommandResult::Handoff => {
+                            // Ringkas sekarang; teks ringkasan = pesan pertama konteks
+                            // setelah compaction (pengganti pesan lama).
+                            let report = session.compact_now().await;
+                            let ringkasan = report.and_then(|_| {
+                                session.messages().iter().find_map(|m| match m {
+                                    tui_wire::Message::User { content }
+                                    | tui_wire::Message::System { content } => {
+                                        Some(content.clone())
+                                    }
+                                    tui_wire::Message::Assistant { content, .. } => Some(
+                                        content
+                                            .iter()
+                                            .filter_map(|b| b.as_text())
+                                            .collect::<Vec<_>>()
+                                            .join(""),
+                                    ),
+                                    _ => None,
+                                })
+                            });
+                            let teks = match ringkasan {
+                                Some(r) => format!(
+                                    "ringkasan handoff (jalankan /new lalu kirim ini sebagai pesan pertama):\n\n{r}"
+                                ),
+                                None => "tidak ada yang bisa diringkas".to_string(),
+                            };
+                            let _ = events_tx.send(AgentEvent::Notice { text: teks });
+                            continue;
+                        }
+                        CommandResult::TodoSub(aksi, arg) => {
+                            let mut daftar = todo_arc
+                                .lock()
+                                .map_err(|_| "todo terkunci")
+                                .ok()
+                                .map(|g| g.clone())
+                                .unwrap_or_default();
+                            let hasil = match (aksi, arg.as_deref()) {
+                                ('a', Some(teks)) => {
+                                    daftar.push(teks.to_string());
+                                    Ok(daftar)
+                                }
+                                ('r', Some(no)) => {
+                                    let n: usize = no.parse().unwrap_or(0);
+                                    if n >= 1 && n <= daftar.len() {
+                                        daftar.remove(n - 1);
+                                        Ok(daftar)
+                                    } else {
+                                        Err(format!(
+                                            "nomor {no} tidak ada di daftar ({})",
+                                            daftar.len()
+                                        ))
+                                    }
+                                }
+                                ('d', Some(no)) => {
+                                    let n: usize = no.parse().unwrap_or(0);
+                                    if n >= 1 && n <= daftar.len() {
+                                        daftar[n - 1] = format!("[selesai] {}", daftar[n - 1]);
+                                        Ok(daftar)
+                                    } else {
+                                        Err(format!(
+                                            "nomor {no} tidak ada di daftar ({})",
+                                            daftar.len()
+                                        ))
+                                    }
+                                }
+                                ('c', _) => Ok(Vec::new()),
+                                _ => Err("subcommand todo tidak dikenal".to_string()),
+                            };
+                            match hasil {
+                                Ok(baru) => match todo_arc.lock() {
+                                    Ok(mut guard) => {
+                                        *guard = baru;
+                                        let _ = events_tx.send(AgentEvent::Notice {
+                                            text: "todo diperbarui".to_string(),
+                                        });
+                                    }
+                                    Err(_) => {
+                                        let _ = events_tx.send(AgentEvent::Notice {
+                                            text: "todo gagal: daftar terkunci".to_string(),
+                                        });
+                                    }
+                                },
+                                Err(pesan) => {
+                                    let _ = events_tx.send(AgentEvent::Notice { text: pesan });
+                                }
+                            }
+                            continue;
+                        }
+                        CommandResult::Commit => {
+                            // Di worker ini Commit dijalankan sebagai prompt biasa
+                            // oleh antarmuka utama; jalur defensif bila lolos.
+                            let _ = events_tx.send(AgentEvent::Notice {
+                                text: "commit dijalankan lewat antarmuka utama".to_string(),
                             });
                             continue;
                         }
@@ -2841,6 +3060,14 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
                             screen.push_line("[retry] belum ada prompt di sesi ini".to_string())
                         }
                     }
+                    continue;
+                }
+                // /commit → prompt khusus ke agen (approval git tetap berjalan).
+                if text.trim() == "/commit" {
+                    let prompt = tui_core::commands::commit_prompt();
+                    screen.push_line(timeline_label(&text));
+                    screen.busy = true;
+                    let _ = commands.send(Command::Prompt(prompt));
                     continue;
                 }
                 screen.push_line(timeline_label(&text));

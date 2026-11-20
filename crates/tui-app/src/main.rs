@@ -271,6 +271,13 @@ async fn main() -> ExitCode {
         }
         return ExitCode::SUCCESS;
     }
+    if args.setup {
+        if let Err(err) = setup_wizard::jalankan().await {
+            eprintln!("{}: {}", err.code, err.message);
+            return ExitCode::from(1);
+        }
+        return ExitCode::SUCCESS;
+    }
 
     if let Some(cli::Command::Config { action, key, value }) = args.command {
         match action {
