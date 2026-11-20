@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+.mx/
+logs/
+*.log
+*.tmp
+tmp-*.sh
+# data runtime lokal (sesi/grant/kunci/token) tidak pernah masuk repo
+*.jsonl.bak
+serve-token
+relay-key
+# artefak packaging
+dist/
+*.tar.gz
+*.zip

@@ -1,0 +1,24 @@
+[package]
+name = "tui-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+tui-approval.workspace = true
+tui-wire.workspace = true
+directories.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true
+
+[target."cfg(windows)".dependencies]
+keyring = { version = "3.6.3", default-features = false, features = [
+    "windows-native",
+    "apple-native",
+    "sync-secret-service",
+] }

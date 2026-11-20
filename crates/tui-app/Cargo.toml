@@ -1,0 +1,41 @@
+[package]
+name = "tui-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mx"
+path = "src/main.rs"
+
+[dependencies]
+async-trait.workspace = true
+tui-approval.workspace = true
+tui-config.workspace = true
+tui-katalog.workspace = true
+tui-core.workspace = true
+tui-mcp.workspace = true
+tui-subagent.workspace = true
+tui-provider.workspace = true
+tui-session.workspace = true
+tui-sdk.workspace = true
+tui-tools.workspace = true
+tui-wire.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+crossterm.workspace = true
+directories.workspace = true
+ratatui.workspace = true
+unicode-width.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,10 @@
+agent_start
+turn_start:1
+message_start
+message_end:ok:tooluse
+tool_start:echo:{"x":1}
+tool_end:echo:false
+message_start
+message_end:ok:stop
+turn_end:1
+agent_end:1

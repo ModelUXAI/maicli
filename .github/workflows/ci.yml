@@ -1,0 +1,60 @@
+name: CI
+
+# Setiap PR dan push ke main melewati gerbang yang SAMA dengan check.ps1/check.sh:
+# fmt -> clippy -> test -> deny. Matriks: Linux + Windows (keduanya terverifikasi
+# native); macOS ditempatkan sebagai allow-failure (belum ada mesin verifikasi).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  # E2E memakai mock gateway (self-contained) — tidak butuh kunci nyata.
+  MODELUXAI_API_KEY: ci-kunci-mock-tidak-nyata
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: fmt
+        run: cargo fmt --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test --workspace
+
+      - name: install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: deny
+        run: cargo deny check --hide-inclusion-graph

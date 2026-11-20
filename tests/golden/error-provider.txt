@@ -1,0 +1,7 @@
+agent_start
+turn_start:1
+message_start
+provider_error:E_GATEWAY_5XX
+message_end:provider tidak mengirim pesan akhir:error
+turn_end:1
+agent_end:1

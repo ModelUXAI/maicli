@@ -1,0 +1,24 @@
+[package]
+name = "tui-subagent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Subagent lokal (agent anak) untuk mx: tool `subagent` + runner sesi anak"
+
+[dependencies]
+tui-approval.workspace = true
+tui-core.workspace = true
+tui-provider.workspace = true
+tui-session.workspace = true
+tui-tools.workspace = true
+tui-wire.workspace = true
+async-trait.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+# (tidak ada; test memakai dependensi langsung yang relevan)
+
+[lints]
+workspace = true

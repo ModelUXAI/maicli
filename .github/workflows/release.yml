@@ -1,0 +1,103 @@
+name: Release
+
+# Versioning: semver di [workspace.package] version (satu sumber); rilis = tag
+# `vX.Y.Z` (annoted) → build release 3 platform → arsip → GitHub Release dengan
+# catatan dari CHANGELOG (Keep-a-Changelog).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            arsip: mx-${{ github.ref_name }}-linux-x64.tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            arsip: mx-${{ github.ref_name }}-macos-arm64.tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            arsip: mx-${{ github.ref_name }}-windows-x64.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: release-${{ matrix.target }}-
+
+      - name: test (gerbang sebelum rilis — tidak ada rilis dari kode merah)
+        run: cargo test --workspace
+
+      - name: build release
+        run: cargo build --release -p tui-app
+        env:
+          # deny checks berjalan di CI (ci.yml); rilis memakai Lockfile yang sama.
+          CARGO_TERM_COLOR: always
+
+      - name: strip (unix)
+        if: runner.os != 'Windows'
+        run: strip target/release/mx
+
+      - name: arsip (tar)
+        if: runner.os != 'Windows'
+        run: tar -czf "${{ matrix.arsip }}" -C target/release mx
+
+      - name: arsip (zip)
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path target/release/mx.exe -DestinationPath "${{ matrix.arsip }}"
+
+      - name: unggah artefak
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.arsip }}
+          path: ${{ matrix.arsip }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ambil catatan changelog untuk versi ini
+        id: catatan
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          # Ekstrak bagian Keep-a-Changelog di bawah "## [VER]" hingga judul berikut.
+          TEKS=$(awk -v ver="## [$VER]" 'index($0, ver)==1 {flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md)
+          if [ -z "$TEKS" ]; then TEKS="Rilis $GITHUB_REF_NAME"; fi
+          { echo "teks<<EOF"; echo "$TEKS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      - name: unduh artefak
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: buat GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.catatan.outputs.teks }}
+          files: dist/**/*

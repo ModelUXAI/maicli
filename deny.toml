@@ -1,0 +1,42 @@
+[advisories]
+version = 2
+yanked = "warn"
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Allowance yang belum terpakai bukan pelanggaran; daftar sengaja lebih luas
+# dari pohon saat ini agar penambahan crate berikutnya tidak memblokir build.
+unused-allowed-license = "allow"
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+    "Unlicense",
+    "CDLA-Permissive-2.0",
+    "OpenSSL",
+]
+
+[bans]
+multiple-versions = "warn"
+# Dependensi workspace memakai `workspace = true` yang tampil sebagai path +
+# wildcard; semuanya internal sehingga wildcard diizinkan di sini.
+wildcards = "allow"
+deny = [
+    { name = "hyper-old-types" },
+    { name = "async-std" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

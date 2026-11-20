@@ -1,0 +1,19 @@
+[package]
+name = "tui-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Klien MCP (Model Context Protocol) transport stdio + bridge tool untuk mx"
+
+[dependencies]
+tui-tools.workspace = true
+tui-wire.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+bytes.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

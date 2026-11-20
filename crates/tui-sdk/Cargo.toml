@@ -1,0 +1,22 @@
+[package]
+name = "tui-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "SDK embedding Rust untuk sesi agent mx (permukaan publik yang stabil)"
+
+[dependencies]
+tui-approval.workspace = true
+tui-core.workspace = true
+tui-provider.workspace = true
+tui-tools.workspace = true
+tui-wire.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
