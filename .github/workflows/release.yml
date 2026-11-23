@@ -6,7 +6,7 @@ name: Release binaries
 #      memicu event `push` tag, jadi rilis otomatis memanggil workflow ini),
 #   3. `workflow_dispatch` untuk rilis ulang manual.
 #
-# Artefak: Linux x64, macOS arm64, macOS x64, Windows x64 + SHA256.
+# Artefak: Linux x64/arm64, macOS arm64/x64, Windows x64/arm64 + SHA256.
 
 on:
   push:
