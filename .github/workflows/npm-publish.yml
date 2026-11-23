@@ -67,14 +67,16 @@ jobs:
           tulis() {
             local key="$1" os="$2" cpu="$3"
             cat > "pkg/$key/package.json" <<EOF
-          {
-            "name": "modeluxai-$key",
-            "version": "$VER",
-            "description": "Biner maicli (ModeluXAI) untuk $key",
-            "license": "MIT",
-            "os": ["$os"],
-            "cpu": ["$cpu"],
-            "files": ["maicli*"]
+            {
+              "name": "modeluxai-$key",
+              "version": "$VER",
+              "description": "Biner maicli (ModeluXAI) untuk $key",
+              "license": "MIT",
+              "os": ["$os"],
+              "cpu": ["$cpu"],
+              "files": ["maicli*"]
+            }
+          EOF
           }
           tulis linux-x64 linux x64
           tulis linux-arm64 linux arm64

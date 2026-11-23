@@ -13,6 +13,11 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Perbaiki sintaks heredoc npm-publish (2026-11-23)**: `.github/workflows/npm-publish.yml`
+  — penutup heredoc `EOF` dikembalikan dan isi JSON diindentasi agar lolos
+  `actionlint`/shellcheck (4 error SC1073/SC1072/SC1044/SC1009). Semua blok
+  `run:` kini terverifikasi dengan `bash -n`.
+
 - **npm wrapper memakai biner yang benar-benar dirilis (2026-11-23)**:
   `.github/workflows/npm-publish.yml`, `npm/modeluxai/bin/maicli.js`, dan
   `npm/modeluxai/package.json` kini memakai 4 platform yang benar-benar ada di
