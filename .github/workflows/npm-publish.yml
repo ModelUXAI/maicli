@@ -3,7 +3,8 @@ name: npm publish (maicli)
 # Opsional — bukan bagian dari gerbang rilis GitHub. Jalankan manual setelah
 # GitHub Release berisi artefak platform. Butuh secret NPM_TOKEN (scope publish).
 #
-# Paket: wrapper `modeluxai` + paket biner platform
+# Paket: wrapper `@modeluxai/cli` + paket biner platform
+#   (path sumber: `npm/modeluxai/`)
 #   modeluxai-linux-x64, modeluxai-darwin-arm64, modeluxai-darwin-x64,
 #   modeluxai-win32-x64
 # Instal: `npm install -g @modeluxai/cli`
@@ -119,4 +120,4 @@ jobs:
           set -euo pipefail
           cd npm/modeluxai
           npm publish --access public --no-git-checks
-          npm dist-tag add "modeluxai@${TAG#v}" maicli
+          npm dist-tag add "@modeluxai/cli@${TAG#v}" maicli
