@@ -3,10 +3,10 @@ name: npm publish (maicli)
 # Opsional — bukan bagian dari gerbang rilis GitHub. Jalankan manual setelah
 # GitHub Release berisi artefak platform. Butuh secret NPM_TOKEN (scope publish).
 #
-# Paket: wrapper `@modeluxai/cli` + paket biner platform
-#   (path sumber: `npm/modeluxai/`)
-#   modeluxai-linux-x64, modeluxai-darwin-arm64, modeluxai-darwin-x64,
-#   modeluxai-win32-x64
+#   modeluxai-linux-x64, modeluxai-linux-arm64,
+#   modeluxai-win32-x64, modeluxai-win32-arm64
+# (biner macOS belum tersedia karena batas runner GitHub Actions akun;
+#  wrapper akan memberi pesan jelas bila platform tidak didukung.)
 # Instal: `npm install -g @modeluxai/cli`
 
 on:
@@ -44,20 +44,20 @@ jobs:
           mkdir -p dist
           gh release download "$TAG" \
             -p "maicli-linux-x64-$TAG.tar.gz" \
-            -p "maicli-macos-arm64-$TAG.tar.gz" \
-            -p "maicli-macos-x64-$TAG.tar.gz" \
+            -p "maicli-linux-arm64-$TAG.tar.gz" \
             -p "maicli-windows-x64-$TAG.zip" \
+            -p "maicli-windows-arm64-$TAG.zip" \
             -D dist
           ls -la dist/
 
       - name: ekstrak ke pohon paket platform
         run: |
           set -euo pipefail
-          mkdir -p pkg/linux-x64 pkg/darwin-arm64 pkg/darwin-x64 pkg/win32-x64
+          mkdir -p pkg/linux-x64 pkg/linux-arm64 pkg/win32-x64 pkg/win32-arm64
           tar -xzf "dist/maicli-linux-x64-$TAG.tar.gz" -C pkg/linux-x64 --strip-components=1
-          tar -xzf "dist/maicli-macos-arm64-$TAG.tar.gz" -C pkg/darwin-arm64 --strip-components=1
-          tar -xzf "dist/maicli-macos-x64-$TAG.tar.gz" -C pkg/darwin-x64 --strip-components=1
+          tar -xzf "dist/maicli-linux-arm64-$TAG.tar.gz" -C pkg/linux-arm64 --strip-components=1
           unzip -o "dist/maicli-windows-x64-$TAG.zip" -d pkg/win32-x64
+          unzip -o "dist/maicli-windows-arm64-$TAG.zip" -d pkg/win32-arm64
           find pkg -maxdepth 2 -type f | sort
 
       - name: tulis package.json platform
@@ -76,12 +76,10 @@ jobs:
             "cpu": ["$cpu"],
             "files": ["maicli*"]
           }
-          EOF
-          }
           tulis linux-x64 linux x64
-          tulis darwin-arm64 darwin arm64
-          tulis darwin-x64 darwin x64
+          tulis linux-arm64 linux arm64
           tulis win32-x64 win32 x64
+          tulis win32-arm64 win32 arm64
 
       - name: sinkronkan versi wrapper
         run: |
@@ -94,9 +92,9 @@ jobs:
             j.version = ver;
             j.optionalDependencies = {
               "modeluxai-linux-x64": ver,
-              "modeluxai-darwin-arm64": ver,
-              "modeluxai-darwin-x64": ver,
-              "modeluxai-win32-x64": ver
+              "modeluxai-linux-arm64": ver,
+              "modeluxai-win32-x64": ver,
+              "modeluxai-win32-arm64": ver
             };
             fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
           '

@@ -13,6 +13,13 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **npm wrapper memakai biner yang benar-benar dirilis (2026-11-23)**:
+  `.github/workflows/npm-publish.yml`, `npm/modeluxai/bin/maicli.js`, dan
+  `npm/modeluxai/package.json` kini memakai 4 platform yang benar-benar ada di
+  GitHub Release (linux-x64, linux-arm64, win32-x64, win32-arm64). Sebelumnya
+  hardcoded 4 platform termasuk darwin-arm64/darwin-x64 yang tidak terbit karena
+  runner macOS dibatalkan akun GitHub.
+
 - **Rilis tetap terbit bila job macOS dibatalkan (2026-11-23)**:
   `.github/workflows/release.yml` memberi `if: always() && needs.build.result != 'skipped'`
   pada job `release`, supaya artefak dari target yang berhasil tetap dipublikasikan

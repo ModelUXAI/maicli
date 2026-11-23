@@ -27,8 +27,8 @@
   ],
   "optionalDependencies": {
     "modeluxai-linux-x64": "0.1.0",
-    "modeluxai-darwin-arm64": "0.1.0",
-    "modeluxai-darwin-x64": "0.1.0",
-    "modeluxai-win32-x64": "0.1.0"
+    "modeluxai-linux-arm64": "0.1.0",
+    "modeluxai-win32-x64": "0.1.0",
+    "modeluxai-win32-arm64": "0.1.0"
   }
 }

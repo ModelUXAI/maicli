@@ -9,9 +9,9 @@ const fs = require("fs");
 
 const PLATFORM = {
   "linux-x64": "modeluxai-linux-x64",
-  "darwin-arm64": "modeluxai-darwin-arm64",
-  "darwin-x64": "modeluxai-darwin-x64",
+  "linux-arm64": "modeluxai-linux-arm64",
   "win32-x64": "modeluxai-win32-x64",
+  "win32-arm64": "modeluxai-win32-arm64",
 };
 
 const key = `${process.platform}-${process.arch}`;
@@ -19,7 +19,7 @@ const pkgName = PLATFORM[key];
 if (!pkgName) {
   console.error(
     `maicli: platform tidak didukung: ${key}\n` +
-      "yang tersedia: linux-x64, darwin-arm64, darwin-x64, win32-x64.\n" +
+      "yang tersedia: linux-x64, linux-arm64, win32-x64, win32-arm64.\n" +
       "alternatif: build dari sumber (cargo install --path crates/tui-app)."
   );
   process.exit(1);
