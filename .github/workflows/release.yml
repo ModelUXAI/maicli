@@ -201,7 +201,7 @@ jobs:
           if [ -z "$TEKS" ]; then TEKS="Rilis $TAG"; fi
           { echo "teks<<EOF"; echo "$TEKS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
