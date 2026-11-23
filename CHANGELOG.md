@@ -13,6 +13,12 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Stabilisasi test approval timeout di CI (2026-11-23)**: jendela observasi
+  `approval_timeout_menolak_dan_tool_tidak_jalan` diperlebar 5→20 dtk. Diagnosa
+  runner Windows (`cargo test` serial) `exit=0`, tetapi saat CI berjalan dengan
+  beban paralel test ini kadang kehabisan waktu sebelum approval sampai ke UI.
+  Semua assertions tetap sama.
+
 - **Mock SSE path-aware untuk CI Windows (2026-11-23)**: `crates/tui-app/src/tui_mode.rs`
   `spawn_sse_script` kini membedakan `GET /models` (JSON) dari `chat/completions`
   (skrip SSE) dan melayani hingga 32 koneksi. Sebelumnya discovery Windows

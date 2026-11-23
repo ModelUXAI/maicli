@@ -4852,7 +4852,10 @@ provider "uji-cat2" {
         let mut saw_deny_end = false;
         let mut held = Vec::new();
         let started = std::time::Instant::now();
-        let deadline = started + std::time::Duration::from_secs(5);
+        // Runner Windows bisa jauh lebih lambat dari mesin dev; jendela
+        // observasi 5 dtk sering kehabisan sebelum approval sampai ke UI.
+        // Semua assertions tetap sama — hanya waktu tunggu yang diperlebar.
+        let deadline = started + std::time::Duration::from_secs(20);
         while std::time::Instant::now() < deadline {
             while let Ok(pending) = approvals_rx.try_recv() {
                 saw_pending = true;
