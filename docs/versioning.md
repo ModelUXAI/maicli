@@ -12,26 +12,27 @@
   `maicli-<platform>-vX.Y.Z`.
 - Dokumentasi: `docs/setup-github.md` menjelaskan alur versi + tag.
 
-## Yang belum konsisten
+## Status per 2026-11-23
 
-1. **Repo URL** sudah diseragamkan ke `ModelUXAI/maicli` di `release-plz.toml`,
-   `docs/setup-github.md`, `npm/modeluxai/package.json`, `SECURITY.md`, dan issue
-   config. Pastikan repo itu yang benar-benar dibuat.
-2. **Jumlah biner di dokumen masih 4**, padahal matrix `release.yml` sekarang 6
-   target (linux x64/arm64, macOS arm64/x64, Windows x64/arm64).
-3. **Belum ada tag lokal `v0.1.0`** (git tag gagal karena safe.directory); baseline
-   release-plz butuh tag awal. Perlu dicek/dibuat oleh pemilik.
-4. **Versi npm/SDK masih 0.1.0** dan mengikuti rilis manual; perlu diputuskan
-   apakah `npm-publish.yml` menyinkronkan versi dari tag (sudah dilakukan di
-   langkah "sinkronkan versi wrapper"), tetapi paket platform di hardcode 4.
-5. **Belum ada file `VERSION`/changelog rilis pertama**; CHANGELOG hanya
-   `[Unreleased]`. Release-plz akan membuat heading `[0.1.0]` saat PR rilis.
-6. **`semver_check = false`** — sengaja untuk 0.x, tetapi perlu dicatat di dokumen
-   agar kontributor tahu breaking change 0.x hanya menaikkan MINOR.
+1. **Repo URL** seragam `ModelUXAI/maicli` di `release-plz.toml`,
+   `docs/setup-github.md`, `npm/modeluxai/package.json`, `SECURITY.md`,
+   `sdk/go/go.mod`, dan issue config. Repo sudah ada di GitHub.
+2. **Jumlah biner = 6** di dokumen, README, komentar `release.yml`, dan matriks
+   `release.yml` (linux x64/arm64, macOS arm64/x64, Windows x64/arm64) — konsisten.
+3. **Tag baseline `v0.1.0` sudah dibuat lokal** (tag anotasi pada commit rilis).
+   Push tag hanya bisa setelah push `main` diizinkan pemilik repo.
+4. **Versi npm/SDK masih 0.1.0** dan mengikuti rilis manual; `npm-publish.yml`
+   menyinkronkan versi wrapper dari tag. Paket biner platform di-hardcode 4 varian
+   (linux-x64, darwin-arm64, darwin-x64, win32-x64) — linux-arm64 dan
+   win32-arm64 belum punya paket npm meski biner rilisnya ada.
+5. **Belum ada heading `[0.1.0]` di `CHANGELOG.md`**; release-plz yang membuatnya
+   saat PR rilis pertama.
+6. **`semver_check = false`** — sengaja untuk 0.x: breaking change hanya menaikkan
+   MINOR. Ini perlu diketahui kontributor.
 
 ## Rekomendasi
 
-- Buat repo `ModelUXAI/maicli`, lalu buat tag baseline `v0.1.0` sebelum
-  mengaktifkan release-plz.
-- Dokumen sudah diperbarui ke 6 target biner.
-- Biarkan release-plz yang menulis `[0.1.0]` pertama; jangan isi manual.
+- Push `main` + tag `v0.1.0` setelah pemilik memberi akses tulis (collaborator,
+  deploy key, atau PAT).
+- Aktifkan release-plz hanya setelah tag baseline ada di remote.
+- Biarkan release-plz menulis `[0.1.0]` pertama; jangan isi manual.
