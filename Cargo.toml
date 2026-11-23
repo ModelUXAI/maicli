@@ -51,7 +51,7 @@ directories = "6.0"
 globset = "0.4"
 futures-util = { version = "0.3", default-features = false }
 ratatui = "0.30"
-tokio-tungstenite = { version = "0.28", default-features = false, features = [
+tokio-tungstenite = { version = "0.30", default-features = false, features = [
     "connect",
     "handshake",
     "rustls",
