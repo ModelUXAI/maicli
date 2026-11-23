@@ -5,6 +5,14 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 ## [Unreleased]
 
 ### Changed
+- **Konsistensi rilis + commit publik (2026-11-23)**: komentar header
+  `release.yml` menyebut 6 target (bukan 4); `npm-publish.yml` memakai nama paket
+  wrapper yang benar (`@modeluxai/cli`) di komentar dan `npm dist-tag`;
+  `docs/versioning.md` memindahkan temuan ke status (repo `ModelUXAI/maicli`, tag
+  `v0.1.0` lokal, varian npm yang belum terbit). Mode 113 berkas dinormalisasi
+  (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
+  8 E2E, `/tmp/check-final-2026-11-23.log`.
+
 - **Audit penomoran versi + URL repo (2026-11-23)**: `docs/versioning.md`
   merangkum satu versi workspace 0.1.0, release-plz, tag `vX.Y.Z`; URL repo
   diseragamkan ke `ModelUXAI/maicli`; dokumen rilis 4→6 biner; npm
