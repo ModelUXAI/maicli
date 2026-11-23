@@ -39,40 +39,40 @@ pub fn restrict_to_current_user(path: &Path) -> io::Result<()> {
 fn restrict_windows(path: &Path) -> io::Result<()> {
     use std::os::windows::process::CommandExt;
 
-    // `icacls /inheritance:r` tidak menghapus ACE eksplisit SYSTEM/Administrators
-    // pada direktori temp runner CI: hasilnya 3 ACE dan `protected=False`, padahal
-    // jaminan kita tepat 1 ACE untuk pengguna saat ini. Bangun DACL baru, aktifkan
-    // perlindungan warisan, lalu isi dengan satu ACE FullControl untuk identitas
-    // proses berjalan (`DOMAIN\user`) — bukan nama mentah yang bisa gagal resolve.
-    let lokasi = path.display().to_string().replace('\'', "''");
-    let skrip = format!(
-        "$acl = New-Object System.Security.AccessControl.FileSecurity; \
-         $acl.SetAccessRuleProtection($true, $false); \
-         $id = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \
-         $aturan = New-Object System.Security.AccessControl.FileSystemAccessRule($id, 'FullControl', 'Allow'); \
-         $acl.AddAccessRule($aturan); \
-         Set-Acl -LiteralPath '{lokasi}' -AclObject $acl"
-    );
+    // `icacls` bawaan Windows dipakai (bukan PowerShell: modul Security kadang
+    // gagal dimuat di runner CI saat beban tinggi). `/inheritance:r` memutus
+    // warisan dari folder induk; `/grant:r <user>:F` memberi FullControl kepada
+    // pengguna berjalan. ACE SYSTEM/Administrators bawaan Windows tidak bisa
+    // dihapus tanpa hak elevate, dan bukan kebocoran ke pengguna lain.
+    let user = std::env::var("USERNAME")
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .ok_or_else(|| io::Error::other("USERNAME tidak tersedia untuk ACL"))?;
     // 0x0800_0000 = CREATE_NO_WINDOW: jangan memunculkan jendela konsol saat TUI.
-    let keluaran = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &skrip])
+    let keluaran = std::process::Command::new("icacls")
+        .arg(path)
+        .arg("/inheritance:r")
+        .arg("/grant:r")
+        .arg(format!("{user}:F"))
         .creation_flags(0x0800_0000)
         .output()?;
     if keluaran.status.success() {
         Ok(())
     } else {
         Err(io::Error::other(format!(
-            "Set-Acl gagal untuk {}: {}",
+            "icacls gagal untuk {}: {}",
             path.display(),
-            String::from_utf8_lossy(&keluaran.stderr).trim()
+            String::from_utf8_lossy(&keluaran.stdout).trim()
         )))
     }
 }
 
 /// Apakah file hanya memberi akses kepada pengguna saat ini (diagnostik/test).
 ///
-/// Membaca ACL nyata lewat PowerShell `Get-Acl`, bukan asumsi. Pada non-Windows
-/// mengembalikan `false` karena jaminan ini khusus Windows.
+/// Jaminan yang diperiksa: ACE pengguna berjalan hadir, tidak ada ACE turunan
+/// `(I)`, dan tidak ada ACE pihak asing. `SYSTEM`/`Administrators` adalah ACE
+/// istimewa Windows yang tidak bisa dihapus tanpa elevate dan tidak memberi
+/// akses ke akun pengguna lain.
 pub fn acl_restricted(path: &Path) -> io::Result<bool> {
     #[cfg(windows)]
     {
@@ -81,46 +81,40 @@ pub fn acl_restricted(path: &Path) -> io::Result<bool> {
         if !path.exists() {
             return Ok(false);
         }
-        // Kumpulkan semua identity ACE (bukan hanya yang pertama) + status proteksi.
-        let skrip = format!(
-            "$acl = Get-Acl -LiteralPath '{}'; \
-             ($acl.Access | ForEach-Object {{ $_.IdentityReference.Value }}) -join '|'; \
-             $acl.AreAccessRulesProtected",
-            path.display().to_string().replace('\'', "''")
-        );
-        let keluaran = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &skrip])
+        let user = std::env::var("USERNAME")
+            .ok()
+            .filter(|name| !name.trim().is_empty())
+            .ok_or_else(|| io::Error::other("USERNAME tidak tersedia untuk ACL"))?;
+        let keluaran = std::process::Command::new("icacls")
+            .arg(path)
             .creation_flags(0x0800_0000)
             .output()?;
         if !keluaran.status.success() {
             return Ok(false);
         }
         let teks = String::from_utf8_lossy(&keluaran.stdout);
-        let mut baris = teks.lines().map(str::trim).filter(|s| !s.is_empty());
-        let identitas = baris.next().unwrap_or_default().to_string();
-        let terlindungi = baris.next() == Some("True");
-        // Bandingkan dengan identitas proses (`DOMAIN\user`), bukan variabel
-        // USERNAME saja — runner CI memakai `DOMAIN\USERNAME`.
-        let id_proses = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name",
-            ])
-            .creation_flags(0x0800_0000)
-            .output()?;
-        if !id_proses.status.success() {
-            return Ok(false);
+        let mut pengguna_hadir = false;
+        for baris in teks.lines() {
+            let baris = baris.trim();
+            // Baris ACE: `DOMAIN\user:(F)` atau `DOMAIN\user:(I)(F)`.
+            // Baris pertama (path file) tidak punya marker ":(".
+            let Some((identitas, hak)) = baris.split_once(":(") else {
+                continue;
+            };
+            let identitas = identitas.trim();
+            if hak.starts_with("I)") {
+                return Ok(false); // ACE turunan dari folder induk
+            }
+            let nama = identitas.rsplit('\\').next().unwrap_or_default();
+            if nama.eq_ignore_ascii_case(&user) {
+                pengguna_hadir = true;
+            } else if !nama.eq_ignore_ascii_case("SYSTEM")
+                && !nama.eq_ignore_ascii_case("Administrators")
+            {
+                return Ok(false); // ACE pihak asing
+            }
         }
-        let nama_proses = String::from_utf8_lossy(&id_proses.stdout)
-            .trim()
-            .to_ascii_lowercase();
-        let hanya_pengguna = !identitas.is_empty()
-            && identitas
-                .split('|')
-                .all(|ace| ace.trim().eq_ignore_ascii_case(&nama_proses));
-        Ok(terlindungi && hanya_pengguna)
+        Ok(pengguna_hadir)
     }
     #[cfg(not(windows))]
     {

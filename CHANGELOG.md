@@ -13,6 +13,15 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **ACL Windows final — verifikasi runner hijau (2026-11-23)**: `crates/tui-wire/src/secure_file.rs`
+  memakai `icacls /inheritance:r /grant:r <user>:F` (tanpa PowerShell `Set-Acl`,
+  yang modul Security-nya gagal dimuat di bawah beban CI). `acl_restricted()`
+  membaca output `icacls` dan memeriksa jaminan nyata: ACE pengguna berjalan
+  hadir, tanpa ACE turunan `(I)`, tanpa ACE pihak asing (ACE `SYSTEM`/
+  `Administrators` bawahan Windows diizinkan). Diagnosa runner Windows dengan env
+  CI persis: `exit=True` (semua test hijau). Percobaan `Set-Acl` dan `icacls *SID`
+  dibatalkan karena keduanya gagal di runner.
+
 - **Stabilisasi test approval timeout di CI (2026-11-23)**: jendela observasi
   `approval_timeout_menolak_dan_tool_tidak_jalan` diperlebar 5→20 dtk. Diagnosa
   runner Windows (`cargo test` serial) `exit=0`, tetapi saat CI berjalan dengan
