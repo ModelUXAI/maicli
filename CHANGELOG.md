@@ -4,6 +4,21 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/ModelUXAI/maicli/compare/v0.1.0...v0.1.1) - 2026-11-23
+
+### Other
+
+- [v0.1.0] finalkan ACL Windows: icacls tanpa PowerShell, verifikasi runner hijau
+- [v0.1.0] perbaiki prasyarat rilis Windows: ACL runner, mock gateway, dan gate indeks
+- [v0.1.0] siapkan repo publik ModelUXAI/maicli: CI, rilis, SDK, npm wrapper
+- tambah 7 command baru dan /effort (antrean prompt, retry, clear, skills, hub, extended-context, force satu turn)
+- ganti nama biner mx menjadi maicli (env var, folder data, docs, packaging)
+- basis v1 lengkap - TUI agent Rust (13 crate, 504 test, 9 E2E)
+- tambah kelompok 2 command: stats, changelog, setup flag, logout, mcp kelola, export, handoff, commit, todo subcommand
+- [v0.1.0] perbaiki paket rilis arm64 dan test computer headless
+- [v0.1.0] tangani clipboard tanpa display dan catat status CI
+- [v0.1.0] perbaiki portabilitas Windows/macOS agar CI lintas platform hijau
+
 ### Changed
 - **Konsistensi rilis + commit publik (2026-11-23)**: komentar header
   `release.yml` menyebut 6 target (bukan 4); `npm-publish.yml` memakai nama paket

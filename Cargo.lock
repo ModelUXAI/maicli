@@ -4180,7 +4180,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tui-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4218,7 +4218,7 @@ dependencies = [
 
 [[package]]
 name = "tui-approval"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "serde",
@@ -4230,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "tui-computer"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4246,7 +4246,7 @@ dependencies = [
 
 [[package]]
 name = "tui-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "directories",
  "keyring",
@@ -4259,14 +4259,14 @@ dependencies = [
 
 [[package]]
 name = "tui-context"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "tui-wire",
 ]
 
 [[package]]
 name = "tui-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4282,7 +4282,7 @@ dependencies = [
 
 [[package]]
 name = "tui-katalog"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "globset",
  "kdl",
@@ -4290,7 +4290,7 @@ dependencies = [
 
 [[package]]
 name = "tui-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4306,7 +4306,7 @@ dependencies = [
 
 [[package]]
 name = "tui-memory"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "rusqlite",
@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "tui-provider"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "reqwest",
@@ -4333,7 +4333,7 @@ dependencies = [
 
 [[package]]
 name = "tui-sdk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4347,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "tui-session"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4358,7 +4358,7 @@ dependencies = [
 
 [[package]]
 name = "tui-subagent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4374,7 +4374,7 @@ dependencies = [
 
 [[package]]
 name = "tui-tools"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "flate2",
@@ -4395,7 +4395,7 @@ dependencies = [
 
 [[package]]
 name = "tui-wire"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "serde",
