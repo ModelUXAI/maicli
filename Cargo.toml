@@ -83,7 +83,7 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 walkdir = "2.5"
-rusqlite = { version = "0.41", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 sha2 = "0.10"
 enigo = "0.6"
 image = { version = "0.25", default-features = false, features = ["png"] }
