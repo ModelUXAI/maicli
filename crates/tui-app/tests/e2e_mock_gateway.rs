@@ -21,17 +21,17 @@ fn spawn_mock_gateway() -> (String, std::thread::JoinHandle<()>) {
     let Some(addr) = listener.local_addr().ok() else {
         panic!("alamat gateway tiruan tidak diketahui");
     };
-    // Thread server tidak di-join: jumlah request bisa kurang dari batas loop
-    // (mis. discovery tidak dipanggil saat cache dianggap ada). Thread akan
-    // berhenti sendiri saat proses test selesai.
-    let _handle = std::thread::spawn(move || {
+    // Satu thread menerima koneksi dan langsung menangani setiap request secara
+    // berurutan. Tiap response memakai `Connection: close`, jadi klien tidak
+    // menunggu keep-alive dan `accept()` berikutnya tidak pernah diblokir.
+    let handle = std::thread::spawn(move || {
         let mut chat_index = 0usize;
-        for _ in 0..8 {
+        for _ in 0..32 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
             let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-            let mut buffer = [0u8; 8192];
+            let mut buffer = [0u8; 16384];
             let _ = stream.read(&mut buffer);
             let request = String::from_utf8_lossy(&buffer);
             let path = request
@@ -62,7 +62,7 @@ fn spawn_mock_gateway() -> (String, std::thread::JoinHandle<()>) {
             let _ = stream.flush();
         }
     });
-    (format!("http://{addr}/v1"), _handle)
+    (format!("http://{addr}/v1"), handle)
 }
 
 /// Gateway tiruan yang memerintahkan pemanggilan tool bernama `tool_name`

@@ -13,6 +13,19 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Perbaikan prasyarat rilis Windows (2026-11-23)**: `crates/tui-wire/src/secure_file.rs`
+  mengganti `icacls /inheritance:r` (menyisakan 3 ACE SYSTEM/Administrators/user,
+  `protected=False` di runner CI) dengan DACL baru via `Set-Acl`: tepat 1 ACE
+  FullControl untuk `WindowsIdentity::GetCurrent().Name` + proteksi warisan aktif.
+  `acl_restricted()` kini memeriksa SEMUA ACE dan membandingkan identitas proses
+  lengkap, bukan hanya `USERNAME` + ACE pertama. `crates/tui-app/tests/e2e_mock_gateway.rs`
+  menaikkan kapasitas mock server jadi 32 koneksi (dulu 8) dan buffer 16 KB untuk
+  menahan beberapa koneksi reqwest paralel di Windows. `scripts/check-docs-index.sh`
+  memakai `pwd -P` agar `git check-ignore` bekerja ketika cwd adalah symlink.
+  Verifikasi: `check.sh` hijau 641 test + 8 E2E (`/tmp/check-win2-2026-11-23.log`),
+  clippy cross-target Windows hijau (`/tmp/clippy-win-final.log`).
+  **Belum diverifikasi di runner Windows nyata** — perlu push + CI.
+
 - **Portabilitas CI lintas platform (2026-11-23)**: `crates/tui-computer/src/lib.rs`
   memberi fallback `daftar_jendela` di luar Linux; `crates/tui-tools/src/media.rs`
   memindah `use super::*` ke dalam test `cfg(unix)`; test `kill_tree_posix` di-gate

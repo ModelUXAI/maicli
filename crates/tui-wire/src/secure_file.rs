@@ -39,25 +39,32 @@ pub fn restrict_to_current_user(path: &Path) -> io::Result<()> {
 fn restrict_windows(path: &Path) -> io::Result<()> {
     use std::os::windows::process::CommandExt;
 
-    let user = std::env::var("USERNAME")
-        .ok()
-        .filter(|name| !name.trim().is_empty())
-        .ok_or_else(|| io::Error::other("USERNAME tidak tersedia untuk ACL"))?;
+    // `icacls /inheritance:r` tidak menghapus ACE eksplisit SYSTEM/Administrators
+    // pada direktori temp runner CI: hasilnya 3 ACE dan `protected=False`, padahal
+    // jaminan kita tepat 1 ACE untuk pengguna saat ini. Bangun DACL baru, aktifkan
+    // perlindungan warisan, lalu isi dengan satu ACE FullControl untuk identitas
+    // proses berjalan (`DOMAIN\user`) — bukan nama mentah yang bisa gagal resolve.
+    let lokasi = path.display().to_string().replace('\'', "''");
+    let skrip = format!(
+        "$acl = New-Object System.Security.AccessControl.FileSecurity; \
+         $acl.SetAccessRuleProtection($true, $false); \
+         $id = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \
+         $aturan = New-Object System.Security.AccessControl.FileSystemAccessRule($id, 'FullControl', 'Allow'); \
+         $acl.AddAccessRule($aturan); \
+         Set-Acl -LiteralPath '{lokasi}' -AclObject $acl"
+    );
     // 0x0800_0000 = CREATE_NO_WINDOW: jangan memunculkan jendela konsol saat TUI.
-    let output = std::process::Command::new("icacls")
-        .arg(path)
-        .arg("/inheritance:r")
-        .arg("/grant:r")
-        .arg(format!("{user}:F"))
+    let keluaran = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &skrip])
         .creation_flags(0x0800_0000)
         .output()?;
-    if output.status.success() {
+    if keluaran.status.success() {
         Ok(())
     } else {
         Err(io::Error::other(format!(
-            "icacls gagal untuk {}: {}",
+            "Set-Acl gagal untuk {}: {}",
             path.display(),
-            String::from_utf8_lossy(&output.stdout).trim()
+            String::from_utf8_lossy(&keluaran.stderr).trim()
         )))
     }
 }
@@ -71,35 +78,49 @@ pub fn acl_restricted(path: &Path) -> io::Result<bool> {
     {
         use std::os::windows::process::CommandExt;
 
-        let user = std::env::var("USERNAME").unwrap_or_default();
-        if user.trim().is_empty() || !path.exists() {
+        if !path.exists() {
             return Ok(false);
         }
-        let script = format!(
+        // Kumpulkan semua identity ACE (bukan hanya yang pertama) + status proteksi.
+        let skrip = format!(
             "$acl = Get-Acl -LiteralPath '{}'; \
-             \"$($acl.Access.Count)|$($acl.Access[0].IdentityReference.Value)|$($acl.AreAccessRulesProtected)\"",
+             ($acl.Access | ForEach-Object {{ $_.IdentityReference.Value }}) -join '|'; \
+             $acl.AreAccessRulesProtected",
             path.display().to_string().replace('\'', "''")
         );
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        let keluaran = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &skrip])
             .creation_flags(0x0800_0000)
             .output()?;
-        if !output.status.success() {
+        if !keluaran.status.success() {
             return Ok(false);
         }
-        let text = String::from_utf8_lossy(&output.stdout);
-        let line = text.lines().next().unwrap_or_default().trim();
-        let mut parts = line.split('|');
-        let count = parts
-            .next()
-            .and_then(|value| value.trim().parse::<usize>().ok());
-        let identity = parts.next().unwrap_or_default().to_string();
-        let protected = parts.next().unwrap_or_default().trim() == "True";
-        let names_current_user = identity
-            .rsplit('\\')
-            .next()
-            .is_some_and(|name| name.eq_ignore_ascii_case(&user));
-        Ok(count == Some(1) && protected && names_current_user)
+        let teks = String::from_utf8_lossy(&keluaran.stdout);
+        let mut baris = teks.lines().map(str::trim).filter(|s| !s.is_empty());
+        let identitas = baris.next().unwrap_or_default().to_string();
+        let terlindungi = baris.next() == Some("True");
+        // Bandingkan dengan identitas proses (`DOMAIN\user`), bukan variabel
+        // USERNAME saja — runner CI memakai `DOMAIN\USERNAME`.
+        let id_proses = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name",
+            ])
+            .creation_flags(0x0800_0000)
+            .output()?;
+        if !id_proses.status.success() {
+            return Ok(false);
+        }
+        let nama_proses = String::from_utf8_lossy(&id_proses.stdout)
+            .trim()
+            .to_ascii_lowercase();
+        let hanya_pengguna = !identitas.is_empty()
+            && identitas
+                .split('|')
+                .all(|ace| ace.trim().eq_ignore_ascii_case(&nama_proses));
+        Ok(terlindungi && hanya_pengguna)
     }
     #[cfg(not(windows))]
     {
