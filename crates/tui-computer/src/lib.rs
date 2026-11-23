@@ -221,6 +221,11 @@ fn daftar_jendela() -> Result<String, String> {
     })
 }
 
+#[cfg(not(target_os = "linux"))]
+fn daftar_jendela() -> Result<String, String> {
+    Err("daftar jendela belum didukung di platform ini".to_string())
+}
+
 /// Tree aksesibilitas sederhana: jendela + geometri (X11).
 #[cfg(target_os = "linux")]
 fn ax_tree() -> Result<String, String> {

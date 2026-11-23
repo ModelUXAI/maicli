@@ -1167,8 +1167,9 @@ mod tests {
     }
 
     // Kriteria §2.2 #2: kill-tree POSIX menghentikan SELURUH pohon
-    // (shell + utilitas anak). Jalan di Unix; dibuktikan di server Linux.
-    #[cfg(unix)]
+    // (shell + utilitas anak). Bukti diambil dari /proc, jadi hanya Linux —
+    // macOS tidak punya /proc dan akan selalu gagal di pemeriksaan awal.
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn kill_tree_posix_menghentikan_pohon() {
         use std::process::Stdio;
@@ -1187,10 +1188,6 @@ mod tests {
         let pid = child.id().expect("pid");
         // Tunggu utilitas sleep benar-benar hidup.
         tokio::time::sleep(Duration::from_millis(300)).await;
-        eprintln!(
-            "[debug] pid={pid} stat={}",
-            std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default()
-        );
         let anak_hidup = |pid: u32| -> bool {
             // Anggota group tersisa? Zombie (Z) = sudah mati, menunggu reap —
             // dianggap mati (temuan debug di server Linux 2026-11-20).

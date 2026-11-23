@@ -178,6 +178,7 @@ mod tests {
             vec!["init", "-q"],
             vec!["config", "user.email", "t@example.com"],
             vec!["config", "user.name", "T"],
+            vec!["config", "core.autocrlf", "false"],
         ] {
             assert!(
                 Command::new("git")

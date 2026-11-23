@@ -107,6 +107,7 @@ mod tests {
         assert!(git(&["init", "-q"]));
         assert!(git(&["config", "user.email", "t@example.com"]));
         assert!(git(&["config", "user.name", "T"]));
+        assert!(git(&["config", "core.autocrlf", "false"]));
         std::fs::write(root.join("a.txt"), "base\n").unwrap();
         assert!(git(&["add", "a.txt"]));
         assert!(git(&["commit", "-qm", "base"]));

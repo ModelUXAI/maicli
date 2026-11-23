@@ -151,11 +151,10 @@ impl Tool for MediaTool {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use super::*;
-
     #[cfg(unix)]
     #[tokio::test]
     async fn tulis_hasil_dari_child() {
+        use super::*;
         let root = std::env::temp_dir().join(format!(
             "maicli-media-{}-{}",
             std::process::id(),
