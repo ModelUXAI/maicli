@@ -13,6 +13,10 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Instal linker arm64 disederhanakan (2026-11-23)**: `.github/workflows/release.yml`
+  tidak lagi menjalankan `dpkg --add-architecture arm64` + `apt-get update`
+  (sering gagal/timeout di runner); cukup `apt-get install gcc-aarch64-linux-gnu`.
+
 - **Rilis lintas-target tidak menjalankan test (2026-11-23)**:
   `.github/workflows/release.yml` membatasi langkah `cargo test --workspace` hanya
   ke target native `x86_64-unknown-linux-gnu`. Gerbang merah sudah dijamin CI

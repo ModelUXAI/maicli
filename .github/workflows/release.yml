@@ -92,15 +92,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
+          # Cukup toolchain link silang; `dpkg --add-architecture` + `apt-get
+          # update` sering gagal/timeout di runner GitHub dan membatalkan rilis.
           sudo apt-get install -y gcc-aarch64-linux-gnu
           mkdir -p .cargo
           cat >> .cargo/config.toml <<'CFG'
           [target.aarch64-unknown-linux-gnu]
           linker = "aarch64-linux-gnu-gcc"
           CFG
-
       - name: build release
         run: cargo build --release --locked -p tui-app --target ${{ matrix.target }}
 
