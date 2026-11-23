@@ -13,6 +13,11 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Rilis tetap terbit bila job macOS dibatalkan (2026-11-23)**:
+  `.github/workflows/release.yml` memberi `if: always() && needs.build.result != 'skipped'`
+  pada job `release`, supaya artefak dari target yang berhasil tetap dipublikasikan
+  saat runner macOS dibatalkan akun GitHub (job macOS sering cancel dengan 0 langkah).
+
 - **Test computer tahan display usang (2026-11-23)**: `crates/tui-computer/src/lib.rs`
   menjalankan `ax_tree()` dan `clipboard_roundtrip` di thread dengan batas 3 dtk; `x11rb::connect` bisa
   menggantung tanpa batas pada container/CI dengan `DISPLAY` usang. Timeout

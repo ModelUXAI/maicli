@@ -185,6 +185,11 @@ jobs:
   release:
     name: release
     needs: build
+    # GitHub bisa membatalkan job macOS karena batas runner akun. Tetap rilis
+    # artefak target yang berhasil (minimal satu) daripada melewati rilis
+    # seluruhnya; `if-no-files-found: error` di upload menjamin tiap job sukses
+    # hanya bila benar-benar menghasilkan arsip.
+    if: always() && needs.build.result != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
