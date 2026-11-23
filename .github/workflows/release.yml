@@ -149,7 +149,15 @@ jobs:
           mkdir -p "$DIR"
           cp "target/${{ matrix.target }}/release/maicli" "$DIR/"
           cp LICENSE README.md CHANGELOG.md "$DIR/"
-          if [ "${{ runner.os }}" != "macOS" ]; then strip "$DIR/maicli"; fi
+          # `strip` host hanya bisa membaca ELF arsitektur host; untuk arm64
+          # pakai `aarch64-linux-gnu-strip` yang dipasang di langkah deps lintas.
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+              aarch64-linux-gnu-strip "$DIR/maicli"
+            else
+              strip "$DIR/maicli"
+            fi
+          fi
           tar -czf "dist/${{ matrix.arsip }}-${TAG}.tar.gz" -C dist "${{ matrix.arsip }}"
           rm -rf "$DIR"
           (cd dist && sha256sum "${{ matrix.arsip }}-${TAG}.tar.gz" > "${{ matrix.arsip }}-${TAG}.tar.gz.sha256")

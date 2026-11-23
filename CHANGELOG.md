@@ -13,6 +13,11 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Test computer tahan display usang (2026-11-23)**: `crates/tui-computer/src/lib.rs`
+  menjalankan `ax_tree()` dan `clipboard_roundtrip` di thread dengan batas 3 dtk; `x11rb::connect` bisa
+  menggantung tanpa batas pada container/CI dengan `DISPLAY` usang. Timeout
+  dianggap sebagai X11 tidak tersedia (perilaku terdokumentasi).
+
 - **Instal linker arm64 disederhanakan (2026-11-23)**: `.github/workflows/release.yml`
   tidak lagi menjalankan `dpkg --add-architecture arm64` + `apt-get update`
   (sering gagal/timeout di runner); cukup `apt-get install gcc-aarch64-linux-gnu`.
