@@ -13,6 +13,12 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Rilis lintas-target tidak menjalankan test (2026-11-23)**:
+  `.github/workflows/release.yml` membatasi langkah `cargo test --workspace` hanya
+  ke target native `x86_64-unknown-linux-gnu`. Gerbang merah sudah dijamin CI
+  pada commit yang sama; menjalankan test di target silang `aarch64-unknown-linux-gnu`
+  gagal di harness/test emulator dan membatalkan job rilis lain.
+
 - **ACL Windows final — verifikasi runner hijau (2026-11-23)**: `crates/tui-wire/src/secure_file.rs`
   memakai `icacls /inheritance:r /grant:r <user>:F` (tanpa PowerShell `Set-Acl`,
   yang modul Security-nya gagal dimuat di bawah beban CI). `acl_restricted()`
