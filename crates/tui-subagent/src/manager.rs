@@ -87,16 +87,16 @@ struct EventSlot {
 impl EventSlot {
     /// Kirim event: ke langganan, atau tunggakan (maks 200) bila belum ada.
     fn kirim(&self, event: tui_wire::AgentEvent) {
-        if let Ok(slot) = self.pengirim.try_lock() {
-            if let Some(tx) = &*slot {
-                let _ = tx.send(event);
-                return;
-            }
+        if let Ok(slot) = self.pengirim.try_lock()
+            && let Some(tx) = &*slot
+        {
+            let _ = tx.send(event);
+            return;
         }
-        if let Ok(mut tunggakan) = self.tunggakan.lock() {
-            if tunggakan.len() < 200 {
-                tunggakan.push(event);
-            }
+        if let Ok(mut tunggakan) = self.tunggakan.lock()
+            && tunggakan.len() < 200
+        {
+            tunggakan.push(event);
         }
     }
 
@@ -267,15 +267,14 @@ async fn runner(
 ) {
     // Sesi anak dengan store file opsional (lineage).
     let mut store: Option<SessionStore> = None;
-    if let (Some(dir), false) = (sessions_dir.as_ref(), parent_id.is_empty()) {
-        if let Ok(new_store) =
+    if let (Some(dir), false) = (sessions_dir.as_ref(), parent_id.is_empty())
+        && let Ok(new_store) =
             SessionStore::create_with_parent(dir, "subagent", ".", Some(parent_id.clone()))
-        {
-            if let Ok(mut slot) = handle.session_path.lock() {
-                *slot = Some(new_store.path().to_path_buf());
-            }
-            store = Some(new_store);
+    {
+        if let Ok(mut slot) = handle.session_path.lock() {
+            *slot = Some(new_store.path().to_path_buf());
         }
+        store = Some(new_store);
     }
     // Anak tidak boleh bersarang: buang tool `subagent` dari registry anak.
     let registry = ToolRegistry::from_tools(
@@ -395,15 +394,14 @@ async fn runner(
                     turns: outcome.turns,
                     tool_calls,
                 };
-                if let Some(s) = store.as_mut() {
-                    if let Some(last) = sesi
+                if let Some(s) = store.as_mut()
+                    && let Some(last) = sesi
                         .messages()
                         .iter()
                         .rev()
                         .find(|m| matches!(m, Message::Assistant { .. }))
-                    {
-                        let _ = s.append(&tui_session::SessionEntry::message(None, last.clone()));
-                    }
+                {
+                    let _ = s.append(&tui_session::SessionEntry::message(None, last.clone()));
                 }
                 // Hasil ditulis SEBELUM status final supaya pembaca yang melihat
                 // status Idle/Killed selalu menemukan hasilnya (tanpa race).
@@ -423,17 +421,17 @@ async fn runner(
                     turns: 0,
                     tool_calls: 0,
                 });
-                if let Some(hasil) = &hasil_kini {
-                    if let Ok(mut slot) = handle.result.lock() {
-                        *slot = Some(hasil.clone());
-                    }
+                if let Some(hasil) = &hasil_kini
+                    && let Ok(mut slot) = handle.result.lock()
+                {
+                    *slot = Some(hasil.clone());
                 }
             }
         }
-        if let Some(hasil) = &hasil_kini {
-            if let Ok(mut slot) = handle.result.lock() {
-                *slot = Some(hasil.clone());
-            }
+        if let Some(hasil) = &hasil_kini
+            && let Ok(mut slot) = handle.result.lock()
+        {
+            *slot = Some(hasil.clone());
         }
         if killed {
             set_state(&handle, SubagentState::Killed);

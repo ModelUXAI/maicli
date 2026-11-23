@@ -2,7 +2,7 @@
 
 Status: **DONE (transport + prompt_result/settled)** — negosiasi versi, chunking frame besar, dan semantik akhir prompt. Fitur
 protokol lanjutan yang belum ada (extension UI, subagent, sesi/queue) tercatat
-sebagai peta jalan di `docs/platform-dan-integrasi.md` §5; host tools/URIs dan
+sebagai peta jalan di dokumen roadmap internal (tidak dipublikasikan); host tools/URIs dan
 `prompt_result` kini ada.
 
 Dokumen ini melanjutkan `docs/rpc-v1.md`; v1 tetap **default** dan klien lama
@@ -225,6 +225,17 @@ Wiring penuh sejak putaran berikutnya: `ToolContext.uri_bridge` (`tui_tools::Uri
 | Subagent frames | belum (subagent belum ada) |
 | Sesi/queue commands (`get_state`, `open_session`, **antrean prompt** batas 8 saat turn berjalan; notice posisi; penuh → `E_AGENT_BUSY`) | ✅ selesai (frame `state`; buka sesi terbaru/`open_session` via `create_with_parent`-style open + lock dijaga) |
 | Spool backpressure ke file | belum (kanal memori) |
+
+## subagent_event + set_ask_dialog (2026-11-21)
+
+- `{"type":"set_subagent_subscription","id":…,"enabled":true}` → `ack`; selama aktif,
+  event anak dikirim sebagai `{"type":"subagent_event","agent":"sub-1","event":"tool_start","payload":"{…}"}`
+  (roster dipantau tiap 300 ms, termasuk anak yang lahir setelah langganan).
+- `{"type":"set_ask_dialog","id":…,"enabled":true}` → `ask_dialog_configured {id,enabled}`.
+  Setelah aktif, tool `ask` dengan `options` mengirim
+  `ask_dialog {id,question,options,recommended,timeout_secs}`; klien menjawab
+  `{"type":"ask_dialog_answer","id":…,"selected":1,"text":""}` (indeks 0-based)
+  atau `{"type":"ask_dialog_answer","id":…,"text":"bebas"}`.
 
 ## subagent_list (2026-11-19)
 

@@ -91,6 +91,13 @@ pub enum CommandResult {
     Commit,
     /// Subcommand `/todo add|rm|clear` (penggantian daftar didelegasi mode).
     TodoSub(char, Option<String>),
+    /// Command fitur yang dieksekusi mode UI (nama tanpa garis miring).
+    Feature {
+        /// Nama command, mis. `memory` atau `mcp-reauth`.
+        name: String,
+        /// Argumen mentah setelah nama.
+        argument: Option<String>,
+    },
     /// Tampilkan daftar provider (tanpa argumen) atau ganti provider aktif.
     SetProvider(Option<String>),
     /// Keluar dari sesi.
@@ -100,6 +107,93 @@ pub enum CommandResult {
     /// Bukan command (kirim ke model).
     NotACommand,
 }
+
+/// Command yang dieksekusi mode UI (bukan logika murni core).
+pub const FEATURE_NAMES: &[&str] = &[
+    "fresh",
+    "pin",
+    "unpin",
+    "jobs",
+    "git",
+    "local",
+    "browser",
+    "copy",
+    "open",
+    "trace",
+    "dump",
+    "debug",
+    "elide",
+    "shake",
+    "modelpreset",
+    "preset",
+    "skillful",
+    "collab",
+    "memory",
+    "mm",
+    "marketplace",
+    "plugins",
+    "ssh",
+    "advisor",
+    "computer",
+    "branch",
+    "fast",
+    "slow",
+    "live",
+    "record",
+    "delete",
+    "btw",
+    "tan",
+    "omfg",
+    "cleanse",
+    "mcp-add",
+    "mcp-test",
+    "mcp-enable",
+    "mcp-disable",
+    "export-anon",
+    "checkpoint",
+    "rewind",
+    "hook-test",
+    "artifact",
+    "conflict",
+    "xd",
+    "tool-issue",
+    "tool-issues",
+    "tool-issue-resolve",
+    "task-worktree",
+    "skill-new",
+    "skill-rm",
+    "skill-list",
+    "diagnose",
+    "compare",
+    "watchdog",
+    "prewalk",
+    "research",
+    "guided-goal",
+    "think",
+    "yield",
+    "goal",
+    "loop",
+    "ratchet",
+    "accept",
+    "staging",
+    "system-prompt",
+    "plan",
+    "plan-review",
+    "install-id",
+    "prompts",
+    "notifications",
+    "budget",
+    "edit",
+    "add-dir",
+    "dirs",
+    "review",
+    "annotate",
+    "context-note",
+    "new-context",
+    "todo-export",
+    "todo-import",
+    "todo-copy",
+];
 
 /// Daftar command v1 beserta deskripsi satu baris.
 /// Satu command builtin beserta atributnya (C-08).
@@ -198,7 +292,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "todo",
-        usage: "[add <teks>|rm <no>|clear]",
+        usage: "[add|append|start|done|drop|rm|clear|copy|export|import]",
         aliases: &[],
         description: "daftar dan kelola todo sesi",
         allow_args: true,
@@ -212,10 +306,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "fork",
-        usage: "",
+        usage: "[pane|window|tab]",
         aliases: &[],
-        description: "duplikasi sesi lalu lanjutkan salinannya",
-        allow_args: false,
+        description: "duplikasi sesi lalu lanjutkan salinannya (argumen = buka di pane/window)",
+        allow_args: true,
     },
     CommandSpec {
         name: "tools",
@@ -310,7 +404,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "mcp",
-        usage: "[list|remove <id>]",
+        usage: "[list|add <id> <url>|remove <id>|enable/disable <id>|test <id>|reauth <id>]",
         aliases: &[],
         description: "kelola server MCP (tanpa argumen = list)",
         allow_args: true,
@@ -341,6 +435,524 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage: "",
         aliases: &[],
         description: "hapus semua grant approval",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "fresh",
+        usage: "",
+        aliases: &[],
+        description: "sesi baru tanpa membawa grant approval sesi lama",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "pin",
+        usage: "[no]",
+        aliases: &[],
+        description: "sematkan pesan ke-N (default: pesan terakhir)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "unpin",
+        usage: "[no]",
+        aliases: &[],
+        description: "lepas sematan pesan ke-N (default: semua)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "jobs",
+        usage: "",
+        aliases: &[],
+        description: "daftar job/subagent latar",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "git",
+        usage: "",
+        aliases: &[],
+        description: "status git repo aktif",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "local",
+        usage: "",
+        aliases: &[],
+        description: "tampilkan setting sesi aktif",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "browser",
+        usage: "<url>",
+        aliases: &[],
+        description: "buka URL di browser default",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "copy",
+        usage: "<teks>",
+        aliases: &[],
+        description: "salin teks ke clipboard",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "open",
+        usage: "<path|url>",
+        aliases: &[],
+        description: "buka path/URL dengan aplikasi default",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "trace",
+        usage: "",
+        aliases: &[],
+        description: "tulis permintaan model terakhir ke berkas JSON",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "dump",
+        usage: "",
+        aliases: &[],
+        description: "tulis snapshot state sesi ke berkas JSON",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "debug",
+        usage: "",
+        aliases: &[],
+        description: "tulis dump debug lengkap (state + permintaan terakhir)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "elide",
+        usage: "[keep]",
+        aliases: &[],
+        description: "pangkas hasil tool lama (default semua)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "shake",
+        usage: "[semua|thinking|images]",
+        aliases: &[],
+        description: "pangkas konteks tanpa memanggil model",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "modelpreset",
+        usage: "[save|use|rm|list] ...",
+        aliases: &["preset"],
+        description: "kelola preset model/effort",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "skillful",
+        usage: "[on|off]",
+        aliases: &[],
+        description: "sertakan daftar skill di system prompt",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "collab",
+        usage: "[start|join <url> <room> <kunci>|status|stop]",
+        aliases: &[],
+        description: "relay collab WebSocket in-TUI",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "memory",
+        usage: "[view|add|forget|stats|backend] ...",
+        aliases: &[],
+        description: "memori persisten lintas sesi",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "mm",
+        usage: "[list|show|add|refresh] ...",
+        aliases: &[],
+        description: "mental model dari memori",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "marketplace",
+        usage: "[list|search|install|remove|update] ...",
+        aliases: &[],
+        description: "marketplace extension/plugin",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "plugins",
+        usage: "[list|reload]",
+        aliases: &[],
+        description: "daftar/muat ulang plugin",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "ssh",
+        usage: "[add|list|remove|test] ...",
+        aliases: &[],
+        description: "kelola host SSH untuk exec remote",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "advisor",
+        usage: "[on|off|model <id>]",
+        aliases: &[],
+        description: "model penasihat kedua",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "hook-test",
+        usage: "<event>",
+        aliases: &[],
+        description: "jalankan hook eksternal dari config [hooks]",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "artifact",
+        usage: "[add <path>|list|get <id>]",
+        aliases: &[],
+        description: "kelola lampiran/biner sebagai artefak",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "conflict",
+        usage: "[N|conflict://N] [ours|theirs|base]",
+        aliases: &[],
+        description: "daftar/selesaikan konflik merge git",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "xd",
+        usage: "<uri>",
+        aliases: &[],
+        description: "resolusi URI internal (xd://issue/<id>)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "tool-issue",
+        usage: "<tool> <severity> <pesan>",
+        aliases: &[],
+        description: "laporkan masalah tool",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "tool-issues",
+        usage: "",
+        aliases: &[],
+        description: "daftar isu tool",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "tool-issue-resolve",
+        usage: "<id>",
+        aliases: &[],
+        description: "tandai isu tool selesai",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "task-worktree",
+        usage: "[keep] <prompt>",
+        aliases: &[],
+        description: "jalankan prompt di worktree git terisolasi",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "skill-new",
+        usage: "<nama> <deskripsi>",
+        aliases: &[],
+        description: "buat skill terkelola di <cwd>/skills/",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "skill-rm",
+        usage: "<nama>",
+        aliases: &[],
+        description: "hapus skill terkelola",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "skill-list",
+        usage: "",
+        aliases: &[],
+        description: "daftar skill workspace",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "diagnose",
+        usage: "",
+        aliases: &[],
+        description: "ringkasan kondisi git + anggaran konteks",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "compare",
+        usage: "[ref]",
+        aliases: &[],
+        description: "bandingkan working tree dengan ref git (default HEAD)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "watchdog",
+        usage: "<pola1,pola2>",
+        aliases: &[],
+        description: "atur pola larangan TTSR/watchdog",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "prewalk",
+        usage: "[langkah]",
+        aliases: &[],
+        description: "telusuri rencana read-only sebelum eksekusi",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "research",
+        usage: "<pertanyaan> [putaran 2..5]",
+        aliases: &[],
+        description: "riset terarah read-only beberapa putaran",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "guided-goal",
+        usage: "<tujuan>",
+        aliases: &[],
+        description: "goal + langkah pertama terarah",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "think",
+        usage: "<teks>",
+        aliases: &[],
+        description: "catatan penalaran internal",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "yield",
+        usage: "[teks]",
+        aliases: &[],
+        description: "tandai menunggu masukan",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "goal",
+        usage: "[<teks>|clear]",
+        aliases: &[],
+        description: "tujuan persisten untuk ratchet/loop",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "loop",
+        usage: "<n> <prompt>",
+        aliases: &[],
+        description: "antrekan prompt n kali (1..20)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "ratchet",
+        usage: "[prompt]",
+        aliases: &[],
+        description: "satu langkah lanjutan dari goal",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "accept",
+        usage: "<id>",
+        aliases: &[],
+        description: "terima perubahan staging secara atomik",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "staging",
+        usage: "",
+        aliases: &[],
+        description: "daftar perubahan staging",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "system-prompt",
+        usage: "[<teks>|clear]",
+        aliases: &[],
+        description: "override system prompt pengguna",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "plan",
+        usage: "[<teks>|append <teks>|clear]",
+        aliases: &[],
+        description: "kelola rencana kerja persisten",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "plan-review",
+        usage: "",
+        aliases: &[],
+        description: "tampilkan rencana kerja aktif",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "install-id",
+        usage: "",
+        aliases: &[],
+        description: "tampilkan id instalasi lokal (tanpa telemetri)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "prompts",
+        usage: "[list|use <nama>|clear]",
+        aliases: &[],
+        description: "kelola prompt files dari <cwd>/prompts/*.md",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "notifications",
+        usage: "[add <teks>|list|clear]",
+        aliases: &[],
+        description: "kelola notifikasi aktif untuk system prompt",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "budget",
+        usage: "",
+        aliases: &[],
+        description: "ringkasan pemakaian token dan sisa konteks",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "edit",
+        usage: "[berkas]",
+        aliases: &[],
+        description: "buka berkas di editor eksternal (VISUAL/EDITOR)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "add-dir",
+        usage: "<direktori>",
+        aliases: &[],
+        description: "tambah root pencarian workspace",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "dirs",
+        usage: "[clear]",
+        aliases: &[],
+        description: "daftar root workspace aktif",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "review",
+        usage: "[save]",
+        aliases: &[],
+        description: "review model kedua terhadap diff git (save = simpan anotasi)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "annotate",
+        usage: "[add <teks>|list|clear]",
+        aliases: &[],
+        description: "kelola anotasi review pada system prompt",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "checkpoint",
+        usage: "[label|list]",
+        aliases: &[],
+        description: "simpan patch git + posisi pesan sebagai checkpoint",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "rewind",
+        usage: "[id|latest]",
+        aliases: &[],
+        description: "kembalikan patch git dan potong sesi ke checkpoint",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "context-note",
+        usage: "[add <teks>|list|clear]",
+        aliases: &["note"],
+        description: "catatan konteks persisten untuk system prompt",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "new-context",
+        usage: "",
+        aliases: &[],
+        description: "sesi baru dengan catatan konteks tetap dimuat",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "computer",
+        usage: "[status]",
+        aliases: &[],
+        description: "status tool kontrol desktop",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "branch",
+        usage: "[judul]",
+        aliases: &[],
+        description: "fork sesi lalu buka di pane/window terminal",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "fast",
+        usage: "",
+        aliases: &[],
+        description: "tier layanan prioritas (service_tier=priority)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "slow",
+        usage: "",
+        aliases: &[],
+        description: "kembali ke tier layanan default",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "live",
+        usage: "[start|join <url> <room> <kunci>|status|stop]",
+        aliases: &[],
+        description: "relay live sesi (alias collab)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "record",
+        usage: "[on|off|status]",
+        aliases: &[],
+        description: "rekam event sesi ke JSONL",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "delete",
+        usage: "<id>",
+        aliases: &[],
+        description: "hapus sesi tersimpan (file + lock)",
+        allow_args: true,
+    },
+    CommandSpec {
+        name: "btw",
+        usage: "",
+        aliases: &[],
+        description: "pangkas ringan hasil tool lama (keep 16)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "tan",
+        usage: "",
+        aliases: &[],
+        description: "pangkas hasil tool lama (keep 4)",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "omfg",
+        usage: "",
+        aliases: &[],
+        description: "pangkas semua hasil tool lama",
+        allow_args: false,
+    },
+    CommandSpec {
+        name: "cleanse",
+        usage: "",
+        aliases: &[],
+        description: "buang thinking + semua hasil tool lama",
         allow_args: false,
     },
     CommandSpec {
@@ -521,10 +1133,11 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
     let raw_name = parts.next().unwrap_or_default().to_ascii_lowercase();
     let argument = parts.next().unwrap_or_default().trim().to_string();
     let spec = find_command(&raw_name);
-    if let Some(spec) = spec {
-        if !spec.allow_args && !argument.is_empty() {
-            return CommandResult::Reply(format!("{} tidak menerima argumen", spec.display()));
-        }
+    if let Some(spec) = spec
+        && !spec.allow_args
+        && !argument.is_empty()
+    {
+        return CommandResult::Reply(format!("{} tidak menerima argumen", spec.display()));
     }
     // Alias dipetakan ke nama kanonik supaya perilakunya benar-benar satu.
     let name = spec.map_or(raw_name.clone(), |spec| spec.name.to_string());
@@ -595,14 +1208,50 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
             Some(("remove", id)) if !id.trim().is_empty() => {
                 CommandResult::McpRemove(id.trim().to_string())
             }
+            Some(("reauth", id)) if !id.trim().is_empty() => CommandResult::Feature {
+                name: "mcp-reauth".to_string(),
+                argument: Some(id.trim().to_string()),
+            },
+            Some(("add", sisa)) if !sisa.trim().is_empty() => CommandResult::Feature {
+                name: "mcp-add".to_string(),
+                argument: Some(sisa.trim().to_string()),
+            },
+            Some(("test", id)) if !id.trim().is_empty() => CommandResult::Feature {
+                name: "mcp-test".to_string(),
+                argument: Some(id.trim().to_string()),
+            },
+            Some(("enable", id)) if !id.trim().is_empty() => CommandResult::Feature {
+                name: "mcp-enable".to_string(),
+                argument: Some(id.trim().to_string()),
+            },
+            Some(("disable", id)) if !id.trim().is_empty() => CommandResult::Feature {
+                name: "mcp-disable".to_string(),
+                argument: Some(id.trim().to_string()),
+            },
             Some(("list", _)) | None => CommandResult::McpList,
-            _ => CommandResult::Reply("pakai: /mcp list atau /mcp remove <id>".to_string()),
+            _ => CommandResult::Reply(
+                "pakai: /mcp list|add|remove|enable|disable|test|reauth <id>".to_string(),
+            ),
         },
-        "export" => CommandResult::Export(if argument.is_empty() {
-            None
-        } else {
-            Some(argument)
-        }),
+        "export" => {
+            if argument == "anon" {
+                CommandResult::Feature {
+                    name: "export-anon".to_string(),
+                    argument: None,
+                }
+            } else if argument == "zip" {
+                CommandResult::Feature {
+                    name: "export-zip".to_string(),
+                    argument: None,
+                }
+            } else {
+                CommandResult::Export(if argument.is_empty() {
+                    None
+                } else {
+                    Some(argument)
+                })
+            }
+        }
         "handoff" => CommandResult::Handoff,
         "commit" => CommandResult::Commit,
         "model" => {
@@ -631,7 +1280,16 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
         }),
         "tree" => CommandResult::Tree,
         "new" => CommandResult::NewSession,
-        "fork" => CommandResult::ForkSession,
+        "fork" => match argument.as_str() {
+            "" => CommandResult::ForkSession,
+            "pane" | "window" | "tab" => CommandResult::Feature {
+                name: "branch".to_string(),
+                argument: Some(argument),
+            },
+            lain => CommandResult::Reply(format!(
+                "argumen fork '{lain}' tidak dikenal; pakai pane, window, atau tab"
+            )),
+        },
         "context" => CommandResult::Context,
         "todo" => {
             if argument.is_empty() {
@@ -644,6 +1302,27 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
                     "add" if !sisa.trim().is_empty() => {
                         CommandResult::TodoSub('a', Some(sisa.trim().to_string()))
                     }
+                    "start" | "drop" => match sisa.trim().parse::<usize>() {
+                        Ok(n) if n >= 1 => CommandResult::TodoSub(
+                            if sub == "start" { 's' } else { 'x' },
+                            Some(n.to_string()),
+                        ),
+                        _ => CommandResult::Reply(format!("pakai /todo {sub} <nomor-dari-daftar>")),
+                    },
+                    "append" => match sisa.trim().split_once(char::is_whitespace) {
+                        Some((nomor, teks)) if !teks.trim().is_empty() => {
+                            match nomor.parse::<usize>() {
+                                Ok(n) if n >= 1 => CommandResult::TodoSub(
+                                    'p',
+                                    Some(format!("{n} {}", teks.trim())),
+                                ),
+                                _ => CommandResult::Reply(
+                                    "pakai /todo append <nomor> <teks>".to_string(),
+                                ),
+                            }
+                        }
+                        _ => CommandResult::Reply("pakai /todo append <nomor> <teks>".to_string()),
+                    },
                     "rm" | "done" => match sisa.trim().parse::<usize>() {
                         Ok(n) if n >= 1 => CommandResult::TodoSub(
                             if sub == "rm" { 'r' } else { 'd' },
@@ -652,8 +1331,20 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
                         _ => CommandResult::Reply(format!("pakai /todo {sub} <nomor-dari-daftar>")),
                     },
                     "clear" => CommandResult::TodoSub('c', None),
+                    "export" => CommandResult::Feature {
+                        name: "todo-export".to_string(),
+                        argument: (!sisa.trim().is_empty()).then(|| sisa.trim().to_string()),
+                    },
+                    "import" => CommandResult::Feature {
+                        name: "todo-import".to_string(),
+                        argument: (!sisa.trim().is_empty()).then(|| sisa.trim().to_string()),
+                    },
+                    "copy" => CommandResult::Feature {
+                        name: "todo-copy".to_string(),
+                        argument: None,
+                    },
                     lain => CommandResult::Reply(format!(
-                        "subcommand todo '{lain}' tidak dikenal; pakai: add <teks>, rm <no>, clear (atau /todo saja untuk melihat)"
+                        "subcommand todo '{lain}' tidak dikenal; pakai: add/append/start/done/drop/rm/clear (atau /todo saja)"
                     )),
                 }
             }
@@ -685,6 +1376,74 @@ pub fn dispatch(input: &str, ctx: &CommandContext<'_>) -> CommandResult {
             None => "belum ada file sesi".to_string(),
         }),
         "quit" => CommandResult::Quit,
+        "notifications" => {
+            let arg = argument.as_str();
+            let (sub, isi) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+            let isi = isi.trim();
+            match sub {
+                "list" => CommandResult::Feature {
+                    name: "notifications-list".to_string(),
+                    argument: None,
+                },
+                "clear" => CommandResult::Feature {
+                    name: "notifications-clear".to_string(),
+                    argument: None,
+                },
+                "add" if !isi.is_empty() => CommandResult::Feature {
+                    name: "notifications-add".to_string(),
+                    argument: Some(isi.to_string()),
+                },
+                _ => CommandResult::Reply("pakai /notifications add <teks>|list|clear".to_string()),
+            }
+        }
+        "annotate" => {
+            let arg = argument.as_str();
+            let (sub, isi) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+            let isi = isi.trim();
+            match sub {
+                "list" => CommandResult::Feature {
+                    name: "annotate-list".to_string(),
+                    argument: None,
+                },
+                "clear" => CommandResult::Feature {
+                    name: "annotate-clear".to_string(),
+                    argument: None,
+                },
+                "add" if !isi.is_empty() => CommandResult::Feature {
+                    name: "annotate-add".to_string(),
+                    argument: Some(isi.to_string()),
+                },
+                _ => CommandResult::Reply("pakai /annotate add <teks>|list|clear".to_string()),
+            }
+        }
+        "checkpoint" if argument.trim() == "list" => CommandResult::Feature {
+            name: "checkpoint-list".to_string(),
+            argument: None,
+        },
+        "context-note" => {
+            let arg = argument.as_str();
+            let (sub, isi) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+            let isi = isi.trim();
+            match sub {
+                "list" => CommandResult::Feature {
+                    name: "context-note-list".to_string(),
+                    argument: None,
+                },
+                "clear" => CommandResult::Feature {
+                    name: "context-note-clear".to_string(),
+                    argument: None,
+                },
+                "add" if !isi.is_empty() => CommandResult::Feature {
+                    name: "context-note-add".to_string(),
+                    argument: Some(isi.to_string()),
+                },
+                _ => CommandResult::Reply("pakai /context-note add <teks>|list|clear".to_string()),
+            }
+        }
+        other if FEATURE_NAMES.contains(&other) => CommandResult::Feature {
+            name: other.to_string(),
+            argument: (!argument.is_empty()).then_some(argument),
+        },
         other => {
             let names: Vec<String> = COMMANDS.iter().map(CommandSpec::display).collect();
             CommandResult::Unknown(format!(
@@ -931,7 +1690,7 @@ mod tests {
         assert_eq!(model.display(), "/model [id]");
         let compact = find_command("compact").expect("compact ada");
         assert!(!compact.allow_args);
-        assert_eq!(COMMANDS.len(), 33, "jumlah command harus cocok dokumen");
+        assert_eq!(COMMANDS.len(), 107, "jumlah command harus cocok dokumen");
         for spec in COMMANDS {
             assert!(
                 !spec.description.is_empty(),
@@ -1232,6 +1991,59 @@ mod tests {
         assert!(matches!(
             dispatch("/todo gila", &ctx("m", &tools, None)),
             CommandResult::Reply(_)
+        ));
+    }
+
+    #[test]
+    fn feature_commands_menjadi_feature() {
+        let tools = Vec::new();
+        for name in [
+            "fresh",
+            "pin",
+            "unpin",
+            "jobs",
+            "git",
+            "local",
+            "browser",
+            "copy",
+            "open",
+            "trace",
+            "dump",
+            "debug",
+            "elide",
+            "shake",
+            "modelpreset",
+            "skillful",
+            "collab",
+            "memory",
+            "mm",
+            "marketplace",
+            "plugins",
+            "ssh",
+            "advisor",
+            "computer",
+            "branch",
+            "fast",
+            "slow",
+            "live",
+            "record",
+        ] {
+            match dispatch(&format!("/{name}"), &ctx("m", &tools, None)) {
+                CommandResult::Feature { name: hasil, .. } => {
+                    assert_eq!(hasil, name, "fitur {name}");
+                }
+                other => panic!("{name} menghasilkan {other:?}"),
+            }
+        }
+        assert!(matches!(
+            dispatch("/mcp reauth server", &ctx("m", &tools, None)),
+            CommandResult::Feature { name, argument }
+                if name == "mcp-reauth" && argument.as_deref() == Some("server")
+        ));
+        assert!(matches!(
+            dispatch("/fork pane", &ctx("m", &tools, None)),
+            CommandResult::Feature { name, argument }
+                if name == "branch" && argument.as_deref() == Some("pane")
         ));
     }
 

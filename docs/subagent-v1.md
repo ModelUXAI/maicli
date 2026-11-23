@@ -1,6 +1,6 @@
 # Subagent lokal v1 (`tui-subagent`)
 
-Status: **DONE (tahap A + B)** — item P2 dari `docs/platform-dan-integrasi.md` §8.3.
+Status: **DONE (tahap A + B)** — item P2 dari dokumen roadmap internal (tidak dipublikasikan).
 **Tahap B (2026-11-18): `SubagentManager` + `SubagentHandle`** — kontrol anak live:
 `Steer` (buffer → prompt turn berikutnya), `Abort` (token), `Park`/`Resume` (pause handle),
 `Kill` (matikan task); status 6 keadaan (`berjalan/idle/parkir/selesai/dibatalkan/dihentikan`);

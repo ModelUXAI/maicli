@@ -23,6 +23,21 @@ pub struct McpBoot {
     pub notif_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(String, tui_mcp::McpNotification)>>,
 }
 
+/// Konversi config TUI ke parameter OAuth crate MCP.
+pub fn oauth_config(
+    oauth: &tui_config::McpOAuthConfig,
+    server_url: &str,
+) -> tui_mcp::oauth::OAuthConfig {
+    tui_mcp::oauth::OAuthConfig {
+        client_id: oauth.client_id.clone(),
+        authorization_url: oauth.authorization_url.clone(),
+        token_url: oauth.token_url.clone(),
+        scopes: oauth.scopes.clone(),
+        redirect_port: oauth.redirect_port,
+        server_url: server_url.to_string(),
+    }
+}
+
 /// Penerus notifikasi MCP → event agen `[mcp:<server>] <metode> <params>`.
 ///
 /// Anti-deadlock: task **berhenti sendiri** setelah `BATAS_IDLE` detik tanpa
@@ -62,7 +77,14 @@ pub fn spawn_event_forward(
 }
 
 /// Hubungkan semua server MCP yang `enabled`.
-pub async fn connect_all(config: &McpConfig) -> McpBoot {
+///
+/// `token_root` = folder data aplikasi untuk token OAuth
+/// (`<token_root>/mcp-oauth/<server>.json`).
+pub async fn connect_all(
+    config: &McpConfig,
+    token_root: &std::path::Path,
+    cwd: &std::path::Path,
+) -> McpBoot {
     let mut boot = McpBoot::default();
     let (notif_tx, notif_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut ada_server = false;
@@ -81,6 +103,31 @@ pub async fn connect_all(config: &McpConfig) -> McpBoot {
                 std::collections::HashMap::new();
             for (kunci, nilai) in &server.headers {
                 headers.insert(kunci.clone(), tui_mcp::resolve_header(nilai));
+            }
+            // OAuth: token Bearer dimuat/refresh dari folder data; tanpa token,
+            // server dilewati dengan catatan supaya boot tidak menggantung.
+            if let Some(oauth) = &server.oauth {
+                if headers
+                    .keys()
+                    .any(|key| key.eq_ignore_ascii_case("authorization"))
+                {
+                    // Header eksplisit menang.
+                } else {
+                    let cfg = oauth_config(oauth, url);
+                    let path = tui_mcp::oauth::token_path(token_root, nama);
+                    match tui_mcp::oauth::ensure_access_token(&path, &cfg).await {
+                        Ok(token) => {
+                            headers.insert("Authorization".to_string(), format!("Bearer {token}"));
+                        }
+                        Err(err) => {
+                            boot.notes.push(format!(
+                                "server '{nama}' butuh OAuth: {} (jalankan /mcp reauth {nama})",
+                                err.message
+                            ));
+                            continue;
+                        }
+                    }
+                }
             }
             let headers = Arc::new(headers);
             let hasil = match transport {
@@ -106,7 +153,9 @@ pub async fn connect_all(config: &McpConfig) -> McpBoot {
             }
             continue;
         }
-        let mut spec = ServerSpec::new(nama.clone(), server.command.clone()).timeout(batas);
+        let mut spec = ServerSpec::new(nama.clone(), server.command.clone())
+            .timeout(batas)
+            .root(format!("file://{}", cwd.display()), "workspace");
         for arg in &server.args {
             spec = spec.arg(arg.clone());
         }
@@ -161,7 +210,12 @@ mod tests {
 
     #[tokio::test]
     async fn config_kosong_tanpa_catatan() {
-        let boot = connect_all(&McpConfig::default()).await;
+        let boot = connect_all(
+            &McpConfig::default(),
+            &std::env::temp_dir(),
+            &std::env::temp_dir(),
+        )
+        .await;
         assert!(boot.tools.is_empty());
         assert!(boot.notes.is_empty());
     }
@@ -175,7 +229,7 @@ mod tests {
             ..McpServerConfig::default()
         };
         config.servers.insert("mati".to_string(), mati);
-        let boot = connect_all(&config).await;
+        let boot = connect_all(&config, &std::env::temp_dir(), &std::env::temp_dir()).await;
         assert!(boot.tools.is_empty());
         assert_eq!(boot.notes.len(), 1);
         assert!(boot.notes[0].contains("dinonaktifkan"), "{}", boot.notes[0]);
@@ -190,7 +244,7 @@ mod tests {
         config
             .servers
             .insert("rusak".to_string(), server("perintah-tidak-ada-xyz"));
-        let boot = connect_all(&config).await;
+        let boot = connect_all(&config, &std::env::temp_dir(), &std::env::temp_dir()).await;
         assert!(boot.tools.is_empty());
         assert_eq!(boot.notes.len(), 1);
         assert!(

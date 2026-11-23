@@ -15,6 +15,8 @@ pub mod agent;
 pub mod commands;
 pub mod status;
 
-pub use agent::{AgentSession, TurnOutcome, TurnSettings};
+pub use agent::{
+    AfterToolHook, AgentSession, BeforeToolHook, ContextSyncFn, TurnOutcome, TurnSettings,
+};
 pub use commands::{COMMANDS, CommandContext, CommandResult, CommandSpec, dispatch, help_text};
 pub use status::TurnStatus;

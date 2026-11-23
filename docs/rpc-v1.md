@@ -31,6 +31,9 @@ Server mengirim `ready` lebih dulu, memuat `protocol` dan `model` awal.
 | `ping` | `id` | `pong` |
 | `usage` | `id` | `usage` berisi pemakaian token kumulatif |
 | `answer` | `id?`, `text` | menjawab frame `question`; `text` kosong = dilewati |
+| `set_ask_dialog` | `id`, `enabled` | opt-in dialog `ask` kaya → `ask_dialog_configured`; `ask_dialog` dikirim untuk pertanyaan beropsi |
+| `ask_dialog_answer` | `id`, `selected?`, `text` | jawab `ask_dialog`; `selected` = indeks opsi 0-based, selain itu pakai `text` |
+| `set_subagent_subscription` | `id`, `enabled` | langganan push `subagent_event` per anak (roster 300 ms) |
 | `approval` | `id`, `decision` | menjawab frame `approval_request`; `decision` = `once`, `session`, `always`, atau `deny` |
 | `shutdown` | — | Tutup server dengan rapi |
 
@@ -49,6 +52,9 @@ dilayani — tanpa itu approval/pertanyaan tidak bisa dijawab saat agen berjalan
 | `pong` | `id` |
 | `ack` | `id` |
 | `question` | `question` — dikirim saat tool `ask` menunggu jawaban; balas dengan `answer` |
+| `ask_dialog` | `id`,`question`,`options`,`recommended?`,`timeout_secs` — dialog `ask` kaya; balas `ask_dialog_answer` |
+| `ask_dialog_configured` | `id`,`enabled` — konfirmasi `set_ask_dialog` |
+| `subagent_event` | `agent`,`event`,`payload` — event anak saat langganan aktif |
 | `approval_request` | `id`, `tool`, `tier` (`read`/`write`/`exec`), `subject` — balas dengan `approval` |
 | `usage` | `id`, `input_tokens`, `output_tokens`, `cached_tokens` |
 | `event` | `event` (objek, lihat bawah) |
@@ -104,4 +110,4 @@ supaya frame rusak tidak memperbesar pesan galat.
 - Batas waktu menjawab `approval_request` oleh klien **sudah ada** (mengikuti `limits.approval_timeout_secs`, deny otomatis); yang belum: negosiasi batas waktu per-request oleh klien.
 - Fitur protokol lain yang belum ada (host tools/URIs, `prompt_result` terpisah,
   extension UI, subagent, sesi/queue) tercatat di `docs/rpc-v2.md` §6 dan
-  `docs/platform-dan-integrasi.md` §5.
+  dokumen roadmap internal (tidak dipublikasikan).

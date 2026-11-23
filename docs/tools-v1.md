@@ -150,6 +150,40 @@ Contoh: `{"question":"Lanjut ke sesi berikutnya?"}`
 Hanya berfungsi di sesi interaktif; di luar mode interaktif permintaan ditolak
 dengan pesan bernama (tidak menggantung).
 
+## Tool tambahan (v1.1, 2026-11-23)
+
+Tool berikut terdaftar di `ToolRegistry::v1` atau didaftarkan kondisional oleh
+`Boot::tool_registry()` saat config terkait aktif. Semua tetap melewati
+approval gate sesuai tier.
+
+| Tool | Tier | Aktif bila | Ringkas |
+|---|---|---|---|
+| `fetch` | read | selalu | URL http(s) → teks/markdown, cap 64 KiB |
+| `ast_grep` | read | selalu | pola `$$nama`/`$$$nama`, mask string/komentar |
+| `ast_edit` | write | selalu | proposal → `apply:true` |
+| `hashline_edit` | write | selalu | ganti baris via anchor + hash |
+| `security_scan` | read | selalu | 8 pola kredensial, nilai diredaksi |
+| `web_search` | read | selalu | DuckDuckGo HTML / Brave API |
+| `github` | read | selalu | PR/issue REST; `read pr://…`/`issue://…` |
+| `lsp` | read | `[lsp] enabled` | diagnostics/references/definition/rename/hover |
+| `debug` | exec | `[debug] enabled` | DAP: breakpoints/stack/evaluate/continue |
+| `eval` | exec | selalu | kernel Python/Bun persisten per `kernel_id` |
+| `media` | exec | `[media]` diisi | TTS/gambar via perintah eksternal |
+| `browser` | exec | selalu | CDP HTTP tabs/new/close + WS evaluate |
+| `wait` | read | subagent aktif | tunggu subagent selesai |
+| `stage_write` | write | selalu | staging + `/accept` atomik |
+| `skill` | read | skills ada | baca isi `SKILL.md` |
+| `ssh` | exec | `[ssh] hosts` | exec remote BatchMode |
+| `memory` | write | memory aktif | add/search/view/forget/stats/retain/recall/reflect/learn/edit |
+| `acp_subagent` | exec | `[acp_client] enabled` | agen ACP eksternal |
+| `computer` | exec | selalu | screenshot/input/windows/ax/clipboard/run |
+| `report_tool_issue` | read | selalu | catat isu tool (JSONL, tampil via `/tool-issues`) |
+
+Catatan: `glob`/`grep` memakai cache TTL 5 dtk (`ToolContext.scan_cache`) untuk hasil pemindaian; perubahan berkas baru terlihat setelah cache kedaluwarsa atau tool dipanggil dengan konteks baru.
+
+Catatan: `task-worktree`, `find`, dan tool extension didaftarkan lewat
+`Boot::tool_registry()`/mode; lihat dokumen roadmap internal (tidak dipublikasikan).
+
 ## Override
 
 - `approval.tools.<nama>` di `docs/config-v1.md` menimpa perilaku per tool.

@@ -1,0 +1,87 @@
+name: Release-plz
+
+# Dua fase:
+#   1. `release` — bila PR rilis sudah di-merge, buat tag `vX.Y.Z` + GitHub Release.
+#   2. `release-pr` — buka/perbarui PR rilis berikutnya dari Conventional Commits.
+#   3. `binaries` — panggil workflow release.yml untuk tag baru (GITHUB_TOKEN tidak
+#      memicu `push` tag, jadi pemanggilan eksplisit ini yang membangun biner).
+#
+# Tidak butuh PAT: reusable workflow dipanggil langsung dari workflow ini.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.deteksi.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: catat tag sebelum rilis
+        shell: bash
+        run: git tag --list 'v*' | sort -V > /tmp/tags-before
+
+      - name: release-plz release
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: deteksi tag baru
+        id: deteksi
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          git tag --list 'v*' | sort -V > /tmp/tags-after
+          NEW=$(grep -Fxv -f /tmp/tags-before /tmp/tags-after | tail -1 || true)
+          echo "tag=$NEW" >> "$GITHUB_OUTPUT"
+          if [ -n "$NEW" ]; then
+            echo "tag baru: $NEW"
+          else
+            echo "tidak ada tag baru (tidak ada perubahan rilis)"
+          fi
+
+  release-pr:
+    name: release-pr
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: release-plz release-pr
+        uses: release-plz/action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  binaries:
+    name: binaries
+    needs: release
+    if: needs.release.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}

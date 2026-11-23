@@ -234,6 +234,21 @@ pub struct Session {
 }
 
 impl Session {
+    /// Pasang hook sebelum eksekusi tool (observasi).
+    pub fn set_before_tool(&mut self, hook: tui_core::BeforeToolHook) {
+        self.inner.set_before_tool(hook);
+    }
+
+    /// Pasang hook sinkronisasi konteks sebelum panggilan model.
+    pub fn set_context_sync(&mut self, hook: std::sync::Arc<tui_core::ContextSyncFn>) {
+        self.inner.set_context_sync(hook);
+    }
+
+    /// Pasang hook sesudah eksekusi tool (observasi).
+    pub fn set_after_tool(&mut self, hook: tui_core::AfterToolHook) {
+        self.inner.set_after_tool(hook);
+    }
+
     /// Jalankan satu turn dengan prompt pengguna.
     ///
     /// # Errors

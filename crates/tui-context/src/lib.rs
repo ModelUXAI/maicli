@@ -18,6 +18,7 @@ pub mod budget;
 pub mod plan;
 pub mod prune;
 pub mod shake;
+pub mod strip;
 pub mod tokens;
 
 pub use budget::{
@@ -26,4 +27,5 @@ pub use budget::{
 pub use plan::{CompactionPlan, apply_compaction, plan_compaction};
 pub use prune::{PRUNED_TOOL_RESULT, prune_tool_results};
 pub use shake::{SHAKE_KEEP_LAST, ShakePlan, plan_shake};
+pub use strip::strip_thinking;
 pub use tokens::{estimate_message, estimate_messages, estimate_tokens};

@@ -19,6 +19,7 @@
     )
 )]
 
+pub mod acp_client;
 pub mod manager;
 
 use std::sync::Arc;

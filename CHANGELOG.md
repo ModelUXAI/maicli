@@ -5,6 +5,106 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 ## [Unreleased]
 
 ### Changed
+- **Audit penomoran versi + URL repo (2026-11-23)**: `docs/versioning.md`
+  merangkum satu versi workspace 0.1.0, release-plz, tag `vX.Y.Z`; URL repo
+  diseragamkan ke `ModelUXAI/maicli`; dokumen rilis 4→6 biner; npm
+  `@modeluxai/cli`. Gate: 641 test + 8 E2E.
+
+- **Gate indeks dokumentasi lulus (2026-11-23)**: `check.sh` menjalankan
+  `scripts/check-docs-index.sh`; indeks lengkap. Gate: 641 test + 8 E2E,
+  `/tmp/check-platform-round43-2026-11-23.log`.
+
+- **Gate tautan dokumentasi lulus (2026-11-23)**: `check.sh` menjalankan
+  `scripts/check_doc_links.py`; hasil `tautan dokumentasi ok`. Gate: 641 test +
+  8 E2E, `/tmp/check-platform-round42-2026-11-23.log`.
+
+- **Rapikan CHANGELOG (2026-11-23)**: baris kosong antar-bullet di
+  `[Unreleased]` dihapus; tidak ada perubahan isi. Tanpa perubahan kode.
+
+- **Audit diff/whitespace (2026-11-23)**: `git diff --check` bersih, tidak ada
+  konflik unmerged. Tanpa perubahan kode.
+- **Smoke staging/isu (2026-11-23)**: `/staging`, `/accept`, `/tool-issue`,
+  `/tool-issues`, `/xd` berfungsi pada data dir kosong. Tanpa perubahan kode.
+- **Smoke command baru (2026-11-23)**: `/context-note`, `/plan`, `/artifact
+  list`, `/tool-issues` berfungsi pada data dir kosong. Tanpa perubahan kode.
+- **Smoke RPC/teks (2026-11-23)**: `--mode rpc` mengeluarkan frame `ready`;
+  `--mode text` memuat sesi, `/help`, `/model` pada data dir kosong. Tanpa
+  perubahan kode.
+- **Audit link dokumentasi (2026-11-23)**: tautan relatif di semua `*.md`
+  dicek; satu tautan keluar repo di README diganti teks. Tanpa perubahan kode.
+- **Dokumentasi tool baru (2026-11-23)**: `docs/tools-v1.md` memuat tabel tool
+  v1.1 + tier + syarat aktif. Tanpa perubahan kode.
+- **Sinkronisasi README (2026-11-23 09:52)**: 6 mode, platform rilis arm64,
+  tool/SDK baru, dan perintah TUI terbaru. Tanpa perubahan kode.
+- **Audit akhir (2026-11-23)**: gate penuh dijalankan ulang — 639 test + 8 E2E,
+  `/tmp/check-final-audit-2026-11-23.log`. Tidak ada fitur `❌`; blocker
+  eksternal tercatat di `docs/blocked-external.md`.
+- **Paket sumber pre-rilis (2026-11-23 09:21)**: arsip
+  `/tmp/maicli-pre-release.tar.gz` (789 entry) + SHA256
+  `72f327413c0fa7285a8cbe5ac2ea02867545598bdfc8d71442163f5616aa9fda`.
+  Push/tag belum dilakukan.
+- **Verifikasi akhir (2026-11-23)**: gate penuh dijalankan ulang —
+  `check.sh` SEMUA GERBANG HIJAU, 635 test + 8 E2E,
+  `/tmp/check-final-2026-11-23.log`. Sisa pekerjaan hanya item eksternal.
+- **Rekonsiliasi dokumentasi (2026-11-23 08:18)**: §F40 di
+  `docs/platform-dan-integrasi.md` menandai blok "Masih belum" lama sebagai
+  snapshot historis dan merangkum status terkini. Tanpa perubahan kode.
+- **Bukti pre-UAT (2026-11-23 08:02)**: `docs/uat-v1.md` mencatat bukti U-10
+  (config rusak menyebut file+baris+kunci) dan gate 635 test. UAT manual
+  U-01..U-12 tetap menjadi wewenang pemilik.
+
+- **Natives arm64 (2026-11-23 08:00)**: matrix rilis menambah
+  `aarch64-unknown-linux-gnu` dan `aarch64-pc-windows-msvc`, plus cross-linker
+  Linux arm64. YAML tervalidasi; rilis nyata menunggu tag/push.
+
+- **Notarization macOS (2026-11-23 07:17)**: `release.yml` menambahkan
+  `notarytool submit --wait` + `stapler staple` opsional setelah codesign,
+  aktif bila secret Apple tersedia. YAML tervalidasi; tanpa perubahan Rust.
+
+- **Jalur codesign macOS (2026-11-23 07:14)**: `release.yml` menandatangani
+  biner macOS bila secret `APPLE_CERT_P12` tersedia, lalu `codesign --verify`;
+  notarization belum. YAML tervalidasi, tanpa perubahan kode Rust.
+
+- **Audit plugin runtime (2026-11-23 06:49)**: status `Plugin manager/runtime`
+  diperbarui dari 🟡 ke ✅ setelah diverifikasi: extension loader menjalankan
+  tool proses eksternal dan `/plugins list|reload` terbukti memuat manifest
+  nyata. Tidak ada perubahan kode.
+
+- **Hook eksternal di `serve` (2026-11-23 06:46)**: pass-through setter pada
+  `tui_sdk::Session` memungkinkan `[hooks]` dipasang otomatis pada semua mode,
+  termasuk server HTTP lokal. Gate: `check.sh` hijau, 622 test + 8 E2E,
+  `/tmp/check-platform-round20-2026-11-23.log`.
+
+- **Automatic external hooks (2026-11-23 06:33 lanjutan)**: hook `before_tool`
+  dan `after_tool` dari `[hooks]` kini dipasang otomatis pada sesi mode teks,
+  TUI, dan RPC (serve belum). Gate: `check.sh` hijau, 622 test + 8 E2E,
+  `/tmp/check-platform-round19-2026-11-23.log`.
+
+- **`docs/platform-dan-integrasi.md` §10.2**: audit lengkap fitur omp yang belum
+  ada di TUI (tool, workflow/UX, ekosistem/platform) + prioritas P0–P3;
+  rujukan path `oh-my-pi/` diselaraskan, rekomendasi §10.1 yang basi diperbaiki.
+- **Sistem rilis GitHub** (2026-11-21): CI dipecah menjadi required checks
+  (`fmt`, `clippy` Linux/Windows, `test` Linux/Windows + macOS allow-failure,
+  `build-release`, `deny`, `msrv` Rust 1.89, `pr-title`, `dependency-review`);
+  versioning otomatis **release-plz** (PR rilis + tag `vX.Y.Z` + CHANGELOG);
+  `release.yml` membangun 4 biner (Linux x64, macOS arm64/x64, Windows x64) +
+  SHA256 dan dipanggil juga lewat `workflow_call` (tanpa PAT); ruleset
+  `main-protection` + script `scripts/setup-github.sh`; template PR/issue +
+  Dependabot.
+- **`check.sh` menserialkan test** (`RUST_TEST_THREADS=1`; bisa ditimpa) agar
+  E2E relay/subagent tidak flaky di mesin yang sibuk; CI/release memakai setelan
+  yang sama.
+- **`kdl` dipin ke `~6.5`** agar MSRV 1.89 benar-benar dapat dibangun
+  (`kdl 6.6+` menuntut Rust 1.95); job `msrv` kini memverifikasinya.
+- **Registry command naik dari 33 ke 62** (`CommandSpec` + `CommandResult::Feature`):
+  command baru dieksekusi mode TUI/teks lewat `features.rs`; RPC menolak command
+  fitur dengan pesan mode yang jelas. `MAICLI_DATA_DIR` kini juga memindahkan
+  config global (sebelumnya hanya sesi/log) sehingga sesi portabel benar-benar
+  terisolasi; `default_global_path` menghormati env itu.
+- **Rekaman event** memakai `Recorder` yang bisa dinyalakan/dimatikan saat sesi
+  berjalan; berkas hanya dibuka saat `/record on` (tidak membuat file kosong).
+- **MSRV workspace 1.85 → 1.89** dan `rusqlite` 0.41 (SQLite 3.54) menutup
+  RUSTSEC-2026-0459; `cargo deny` mengizinkan BSL-1.0 (transitif arboard).
 - **Keputusan iqbal (2026-11-18): target paritas dengan omp dilepas.** `docs/paritas.md` menjadi ledger
   bukti perilaku internal (141 baris port + uji); F-01 ditutup; C-12 ditutup dengan 11 golden internal,
   uji mutasi, dan rekaman gateway live. omp tetap rujukan sejarah perilaku di komentar/dokumen.
@@ -28,6 +128,277 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   store sesi di mode teks, TUI, dan RPC tidak lagi menjalankan fs sinkron di dalam future (§4).
 
 ### Added
+- **Sistem GitHub open-source + nama publik (2026-11-23)**: `CODEOWNERS`,
+  `CODE_OF_CONDUCT.md`, review CODEOWNERS di ruleset, PR template docs, dan
+  `docs/nama-publik.md`. Nama final: repo `ModelUXAI/maicli`, paket npm
+  `@modeluxai/cli`, biner tetap `maicli`. YAML/script valid; tanpa perubahan Rust.
+
+- **SDK lintas bahasa dipublikasikan (2026-11-23)**: `sdk/go` (module
+  `github.com/ModelUXAI/maicli/sdk/go`), `sdk/python`, dan `sdk/typescript`
+  berisi client RPC dependency-free + test; dipakai lewat `docs/sdk-lintas-bahasa.md`.
+
+- **Rilis npm `@modeluxai/cli` (2026-11-23)**: `npm/modeluxai/` berisi wrapper
+  `bin/maicli.js` (unduh biner rilis + verifikasi sha256) dan
+  `.github/workflows/npm-publish.yml` untuk publikasi bertag.
+
+- **Paket rilis lokal Linux x64 (2026-11-23)**: binary release dibangun ulang,
+  di-strip, diarsipkan + SHA256; checksum OK dan binary dari arsip berjalan.
+  Path `/tmp/maicli-pkg-final/maicli-linux-x64-v0.1.0.tar.gz`.
+
+- **Gate indeks dokumentasi (2026-11-23)**: `scripts/check-docs-index.sh`
+  memastikan semua `docs/*.md` terindeks; `setup-github.md` dan
+  `subagent-v1.md` ditambahkan ke indeks. Tanpa perubahan Rust.
+
+- **Preflight owner (2026-11-23)**: `scripts/preflight-owner.sh` memeriksa
+  prasyarat item eksternal tanpa mencetak kredensial. Tanpa perubahan Rust.
+
+- **Gate tautan dokumentasi (2026-11-23)**: `scripts/check_doc_links.py`
+  dijalankan oleh `check.sh` sebelum gate Rust. Tanpa perubahan Rust.
+
+- **Indeks dokumentasi (2026-11-23)**: `docs/README.md` menautkan dokumen
+  utama dan menjelaskan snapshot historis. Tanpa perubahan kode.
+- **Dokumentasi taksonomi error (2026-11-23)**: `docs/error-taxonomy.md`
+  merangkum `MxError`/`ToolOutput::err`/config/session/provider/SDK. Tanpa
+  perubahan kode; gate 641 test tetap.
+- **Cache `grep` (2026-11-23 10:11)**: hasil `grep` memakai TTL 5 dtk seperti
+  `glob`; 1 test. Gate: 641 test + 8 E2E,
+  `/tmp/check-platform-round41-2026-11-23.log`.
+
+- **Tool `report_tool_issue` (2026-11-23 10:10)**: laporan isu dari dalam turn,
+  JSONL + tampil lewat `/tool-issues`; 1 test. Gate: 640 test + 8 E2E,
+  `/tmp/check-platform-round40b-2026-11-23.log`.
+
+- **Owner handoff (2026-11-23)**: `docs/owner-handoff.md` memuat perintah persis
+  untuk item eksternal (live gateway, UAT, push/tag, rotasi kunci, relay,
+  macOS, keputusan SDK TS). Tanpa perubahan kode; gate 639 test tetap.
+
+- **Daftar blocker eksternal (2026-11-23)**: `docs/blocked-external.md`
+  merinci item yang butuh pemilik/lingkungan + bukti penerimaan. Tanpa
+  perubahan kode; gate 639 test tetap.
+
+- **`computer` AX tree (2026-11-23 09:40)**: action `ax` (X11) menampilkan
+  jendela terlihat + geometri. Gate: 639 test + 8 E2E,
+  `/tmp/check-platform-round39-2026-11-23.log`.
+
+- **`computer.run` (2026-11-23 09:37)**: urutan 1..32 langkah JSON dalam satu
+  panggilan tool, stop-on-error, run bersarang ditolak. Gate: 638 test + 8 E2E,
+  `/tmp/check-platform-round38-2026-11-23.log`.
+
+- **`computer` windows + clipboard (2026-11-23 09:21)**: action `windows`
+  (X11) dan `clipboard_read`/`clipboard_write`; 1 test clipboard. Gate: 637 test
+  + 8 E2E, `/tmp/check-platform-round37-2026-11-23.log`.
+
+- **Memori kaya (2026-11-23 09:21)**: action `memory` `retain`/`recall`/
+  `reflect`/`learn`/`edit` (sintesis sederhana + pelajaran). Gate: 636 test +
+  8 E2E, `/tmp/check-platform-round36-2026-11-23.log`.
+
+- **Runbook host relay publik (2026-11-23 08:15)**: `docs/relay-public-host.md`
+  berisi unit systemd, vhost nginx TLS+WS, kunci 0600, verifikasi, dan rotasi
+  kunci. Tidak ada perubahan Rust; host nyata tetap wewenang pemilik.
+
+- **TTSR retry (2026-11-23 08:02)**: setelah pola larangan menghentikan stream,
+  aturan disuntikkan dan turn diulang sekali; bila retry juga memicu pola, turn
+  berhenti error. 2 test core. Gate: 635 test + 8 E2E,
+  `/tmp/check-platform-round35-2026-11-23.log`.
+
+- **TTSR stream guard (2026-11-23 07:54)**: `[hooks] ttsr_rules` menghentikan
+  stream saat delta teks memicu pola larangan (test di core). Gate: 634 test +
+  8 E2E, `/tmp/check-platform-round34-2026-11-23.log`.
+
+- **Prewalk (2026-11-23 07:52)**: `/prewalk [langkah]` mengantrekan telusur
+  rencana read-only sebelum eksekusi. Gate: 633 test + 8 E2E,
+  `/tmp/check-platform-round33-2026-11-23.log`.
+
+- **Watchdog/TTSR dasar (2026-11-23 07:47)**: `/watchdog <pola1,pola2>`
+  menyuntik aturan larangan + checker `perlu_stop`. Gate: 632 test + 8 E2E,
+  `/tmp/check-platform-round32b-2026-11-23.log`.
+
+- **Autoresearch (2026-11-23 07:44)**: `/research <pertanyaan> [2..5]`
+  mengantrekan putaran riset read-only. Gate: 631 test + 8 E2E,
+  `/tmp/check-platform-round31b-2026-11-23.log`.
+
+- **Guided goal + think/yield (2026-11-23 07:40)**: `/guided-goal` mengantrekan
+  langkah pertama; `/think`/`/yield` menyuntik kontrol ke konteks. Gate:
+  630 test + 8 E2E, `/tmp/check-platform-round30b-2026-11-23.log`.
+
+- **Goals/loop (2026-11-23 07:37)**: `/goal <teks|clear>`, `/loop <n> <prompt>`
+  (1..20), `/ratchet [prompt]` memakai antrean follow-up. Gate: 629 test + 8 E2E,
+  `/tmp/check-platform-round29b-2026-11-23.log`.
+
+- **Magic keywords (2026-11-23 07:27)**: `[hooks.magic_keywords]` menyuntikkan
+  instruksi tambahan ke konteks bila kata kunci muncul di pesan pengguna
+  (context_sync semua mode). Gate: 628 test + 8 E2E,
+  `/tmp/check-platform-round28b-2026-11-23.log`.
+
+- **Preview → accept (2026-11-23 07:24)**: tool `stage_write` menyimpan
+  perubahan di `<data>/staging`; `/staging` daftar, `/accept <id>` menulis
+  atomik ke target dalam cwd. Gate: 627 test + 8 E2E,
+  `/tmp/check-platform-round27-2026-11-23.log`.
+
+- **System prompt override (2026-11-23 07:20)**: `/system-prompt <teks|clear>`
+  menyimpan `<data>/system-prompt.md` dan menyuntikkannya ke system prompt.
+  Gate: 626 test + 8 E2E, `/tmp/check-platform-round26-2026-11-23.log`.
+
+- **Public URL relay (2026-11-23 07:11)**: `/api/relay-info` dan QR memakai
+  `collab.remote_url` bila relay dipasang di belakang host publik; fallback
+  alamat lokal. Gate: 625 test + 8 E2E,
+  `/tmp/check-platform-round25-2026-11-23.log`.
+
+- **Rotasi kunci relay (2026-11-23 07:07)**: `POST /api/relay/revoke` dengan
+  `x-relay-key` merotasi kunci room (kunci disimpan di `Mutex`); smoke kunci
+  lama → baru, kunci salah → 403. Gate: 625 test + 8 E2E,
+  `/tmp/check-platform-round24-2026-11-23.log`.
+
+- **Link/QR relay lokal (2026-11-23 07:03)**: endpoint `/api/relay-info`
+  (URL, room, QR SVG) dan tampilan link/QR di halaman web relay. Gate:
+  `check.sh` hijau, 625 test + 8 E2E, `/tmp/check-platform-round23-2026-11-23.log`.
+
+- **Klien web relay lokal (2026-11-23 06:59)**: port relay kini melayani halaman
+  HTML+JS untuk join room/kunci via WebSocket; koneksi WS tetap berfungsi.
+  Smoke `curl` + gate: 624 test + 8 E2E,
+  `/tmp/check-platform-round22-2026-11-23.log`.
+
+- **Tool `media` (2026-11-23 06:53)**: TTS/generasi gambar generik lewat
+  `[media] tts_command|image_command` (prompt di stdin, hasil ke berkas, env
+  kredensial dibuang, timeout 30 dtk). Gate: `check.sh` hijau, 623 test + 8 E2E,
+  `/tmp/check-platform-round21b-2026-11-23.log`.
+
+- **Blob artifacts + external hooks (2026-11-23 06:33)**: `/artifact add|list|get`
+  (SHA-256 + metadata) dan `[hooks]` dengan `/hook-test <event>` (stdin JSON,
+  timeout 5 dtk). Gate: `check.sh` hijau, 622 test + 8 E2E,
+  `/tmp/check-platform-round18-2026-11-23.log`.
+
+- **Hashline + resolusi konflik (2026-11-23 06:28)**: tool `hashline_edit`
+  (anchor/hash baris + proposal/apply) dan `/conflict` (`conflict://N`,
+  `ours|theirs|base`). Gate: `check.sh` hijau, 619 test + 8 E2E,
+  `/tmp/check-platform-round17-2026-11-23.log`.
+
+- **`xd://issue` + broker OAuth (2026-11-23 06:19/06:21)**: resolver URI
+  internal untuk isu tool; broker OAuth 2.1 generik di `maicli serve`
+  (`[oauth.broker.<nama>]`, authorization code + PKCE, token di memori).
+  Gate: `check.sh` hijau, 615 test + 8 E2E,
+  `/tmp/check-platform-round16b-2026-11-23.log`.
+
+- **Bun kernel + isu tool (2026-11-23 06:13)**: `eval lang="js"` memakai
+  `bun repl` (state lintas-call), `/tool-issue`, `/tool-issues`, dan
+  `/tool-issue-resolve` dengan injeksi system prompt. Gate: `check.sh` hijau,
+  612 test + 8 E2E, `/tmp/check-platform-round14-2026-11-23.log`.
+
+- **PDF text + browser evaluate (2026-11-23 05:59)**: ekstraksi teks PDF per
+  halaman (`lopdf`+`flate2`) pada `read`, dan `Runtime.evaluate` lewat CDP WS
+  pada tool `browser`. Gate: `check.sh` hijau, 610 test + 8 E2E,
+  `/tmp/check-platform-round13b-2026-11-23.log`.
+
+- **`eval` + `browser` (2026-11-23 05:53)**: kernel Python persisten per
+  `kernel_id` (state lintas-call, timeout) dan kendali tab browser lewat CDP
+  HTTP lokal (`tabs`/`new`/`close`). Gate: `check.sh` hijau, 608 test + 8 E2E,
+  `/tmp/check-platform-round12-2026-11-23.log`.
+
+- **Keybinding kustom (2026-11-23 05:49)**: `[ui.keybindings]` untuk 6 aksi TUI
+  (cancel/palette/help/clear_input/tool_details/hub) + parser tombol teruji.
+  Gate: `check.sh` hijau, 604 test + 8 E2E, `/tmp/check-platform-round11-2026-11-23.log`.
+
+- **`/task-worktree` (2026-11-23 05:44)**: task di worktree git terisolasi
+  dengan hasil JSON berskema (`status`, `task_id`, `worktree`, `output`) dan
+  pembersihan otomatis. Gate: `check.sh` hijau, 603 test + 8 E2E,
+  `/tmp/check-platform-round10-2026-11-23.log`.
+
+- **`wait` + `fs-scan-cache` (2026-11-23 05:37)**: tool penunggu subagent
+  dengan timeout, dan cache TTL 5 dtk untuk hasil `glob`. Gate: `check.sh`
+  hijau, 601 test + 8 E2E, `/tmp/check-platform-round9b-2026-11-23.log`.
+
+- **Plan mode & utilitas kerja (2026-11-23 05:29)**: `/plan` (`append`/`clear`)
+  + `/plan-review` dengan injeksi system prompt, `/diagnose` (status git +
+  anggaran), `/compare [ref]`, dan `/skill-new|rm|list`. Gate: `check.sh`
+  hijau, 598 test + 8 E2E, `/tmp/check-platform-round8b-2026-11-23.log`.
+
+- **`/install-id` (2026-11-23 05:24)**: id instalasi stabil lokal di
+  `<data>/install-id` (0600), tanpa telemetri/jaringan. Gate: `check.sh` hijau,
+  594 test + 8 E2E, `/tmp/check-platform-round7-2026-11-23.log`.
+
+- **`read` diperluas + `find` (2026-11-23 05:16)**: ringkasan SQLite (read-only),
+  daftar entry ZIP/TAR, metadata PDF, header biner; tool `find` memilih path dari
+  daftar kandidat nyata lewat model. Dependensi: `rusqlite` di `tui-tools`
+  (alasan di `DEPENDENCIES.md`). Gate: `check.sh` hijau, 593 test + 8 E2E,
+  `/tmp/check-platform-round6b-2026-11-23.log`.
+
+- **Item lanjutan `platform-dan-integrasi.md` (2026-11-23 05:08)**: `/notifications`
+  (JSONL + system prompt), `/prompts` (`use`/`clear` dari `<cwd>/prompts/*.md`),
+  dan tool `debug` DAP generik lewat config `[debug]` (breakpoints/stack/evaluate/
+  continue; mock adapter). Wiring LSP di `Boot::tool_registry()` juga dipulihkan.
+  Gate: `check.sh` hijau, 588 test + 8 E2E, `/tmp/check-platform-round5b-2026-11-23.log`.
+
+- **Item lanjutan `platform-dan-integrasi.md` (2026-11-23 04:57)**: tool
+  `security_scan` (8 pola kredensial + redaksi), workspace multi-root
+  (`/add-dir`, `/dirs`; `glob`/`grep` memakai semua root), `/edit` (editor
+  eksternal `VISUAL`/`EDITOR`), `/budget` (token + sisa konteks). Gate:
+  `check.sh` hijau, 584 test + 8 E2E, `/tmp/check-platform-round4b-2026-11-23.log`.
+
+- **Pencarian web & GitHub (2026-11-23)**: tool `web_search` (DuckDuckGo HTML
+  default, backend Brave via `BRAVE_SEARCH_API_KEY`) dan tool `github` dengan
+  `read pr://owner/repo/n` / `issue://…` (token opsional `GITHUB_TOKEN`); test
+  parser + server loopback. Gate akhir: `check.sh` hijau, 579 test + 8 E2E,
+  `/tmp/check-platform-round3-2026-11-23.log`.
+
+- **Lanjutan P0/P1 `platform-dan-integrasi.md` (2026-11-23)**: impor context files
+  (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.clinerules`, `.mdc`, Copilot) ke system
+  prompt; tool `fetch` + `read` URL (HTML→markdown, cap 64 KiB); klien LSP generik
+  `[lsp]` (diagnostics/references/definition/rename/hover); `ast_grep`/`ast_edit`
+  dengan proposal dua langkah; `/context-note` + `/new-context`; `/checkpoint` +
+  `/rewind` (patch git + pemotongan sesi); `/review [save]` + `/annotate`.
+  Bukti: `check.sh` hijau, 573 test + 8 E2E, `/tmp/check-platform-round2d-2026-11-23.log`.
+- **Konfigurasi baru**: `[lsp]` (enabled/command/args/timeout_secs) didokumentasikan
+  di `docs/config-v1.md`; tidak ada crate baru untuk putaran ini.
+
+- **Lanjutan platform & integrasi (2026-11-23)** — SDK RPC Go/Python/TypeScript
+  dependency-free di `sdk/` + kebijakan semver (`docs/sdk-lintas-bahasa.md`);
+  tool `acp_subagent` (agen ACP eksternal via config `[acp_client]`) dengan
+  scrub kredensial/cancel/timeout + test child mock; `/export zip` (arsip
+  stored ZIP tanpa dependensi: `transcript.md`, `session.jsonl`, `metadata.txt`);
+  `/computer script [JSON]` (maks. 32 langkah, stop-on-error); frame RPC generik
+  `ui_dialog_request`/`ui_dialog_answer`; multi-sesi live `maicli serve`
+  (`session_id`, daftar, hapus, batas 16); `collab.remote_url` untuk
+  `/collab join <room> <kunci>`. Bukti: `check.sh` hijau, 553 test + 8 E2E (1 live ignored)
+  (`/tmp/check-platform-2026-11-23-final.log`), smoke `/export zip` memakai
+  `zipfile.testzip()` → `None`, test SDK go/python/node hijau.
+- **Dependensi (2026-11-23)**: `url` dinaikkan ke 2.5.9 (RUSTSEC-2026-0592);
+  tidak ada crate ZIP baru — penulis arsip diimplementasikan lokal (stored).
+- **Protokol lanjutan (2026-11-21)**: MCP `ping` kaya (server/protokol/uptime/roots)
+  + `roots/list` mengumumkan workspace; RPC `set_ask_dialog`/`ask_dialog`/
+  `ask_dialog_answer` (opsi + teks), `set_subagent_subscription` +
+  push `subagent_event` (roster 300 ms). Relay **multi-room** (`room=kunci`),
+  peran **View** read-only, failover control, dan **klien guest TUI read-only**
+  (`/collab join <url> <room> <kunci>`) yang memproyeksikan siaran ke timeline.
+- **`/mm` otomatis** (`memory.auto_refresh_models` + `auto_refresh_secs`),
+  `/mm refresh all`, `/export anon` (redaksi kredensial + path), `/todo
+  copy|export|import` + `append|start|drop`, `/delete <id>`, `/btw|/tan|/omfg|/cleanse`,
+  `/mcp add|test|enable|disable`, advisor gateway kedua (`[advisor] provider/model/api_key_env`).
+- **Grup 1 audit omp (13 command)**: `/fresh` (sesi baru + hapus grant sesi),
+  `/pin`/`/unpin` (sematan pesan 1-based, entry `pin` di sesi + tanda 📌),
+  `/jobs` (daftar subagent/job), `/git` (status git repo), `/local` (snapshot
+  setting aktif), `/browser`/`/copy`/`/open` (URL/path/clipboard; path relatif
+  dihitung dari cwd sesi), `/trace`/`/dump`/`/debug` (permintaan model terakhir
+  dan state sesi ke `<config_root>/debug/`), `/elide` + `/shake thinking|images`
+  (pangkas konteks tanpa model), `/modelpreset` (simpan/pakai/hapus preset
+  model+effort), `/skillful on|off` (saklar blok skill di system prompt),
+  `/collab`/`/live` (relay WS in-TUI + kunci room), `/mcp reauth` (OAuth 2.1
+  PKCE + loopback + token 0600).
+- **Grup 2**: memori persisten dengan backend **pilihan** `jsonl`/`markdown`/
+  `sqlite` + embedding lokal hash 384-d (`tui-memory`), command `/memory
+  view|add|search|forget|stats|backend|embedding` + tool `memory`; `/mm`
+  mental model Markdown + refresh dari memori; marketplace extension
+  (install/update/remove dari git, indeks HTTPS, `allow_insecure` untuk repo
+  lokal) + `/plugins reload`; tool `ssh` (host bernama, BatchMode, timeout,
+  output cap, tier Exec) + `/ssh add|list|remove|test`; `/advisor on|off|model`
+  (review model kedua setelah turn); tool `computer` + `/computer
+  status|screenshot|move|click|scroll|type|key` (`enigo` + X11/`xcap`);
+  `/branch` dan `/fork pane|window|tab` (tmux/wezterm/kitty); `/fast`/`/slow`
+  (`service_tier` priority/default); `/record on|off` (rekam event JSONL saat
+  berjalan).
+- **`cargo deny`**: `BSL-1.0` diizinkan (clipboard-win/error-code via arboard);
+  `rusqlite` naik ke 0.41 (SQLite 3.54, menutup RUSTSEC-2026-0459) → MSRV 1.89.
+- **`MAICLI_DATA_DIR`** kini juga memindahkan config global (config, sesi,
+  marketplace, token MCP, rekaman) ke satu folder portabel.
 - **Kelompok 2 (audit omp)**: `/stats`, `/changelog`, `/setup` +
   **`maicli --setup`** (wizard kapan pun), `/settings`, `/logout` (hapus kunci
   keyring), `/mcp list|remove <id>` (hapus = tulis ulang config global dengan

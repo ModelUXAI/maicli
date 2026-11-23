@@ -8,6 +8,7 @@ description = "Subagent lokal (agent anak) untuk maicli: tool `subagent` + runne
 
 [dependencies]
 tui-approval.workspace = true
+tui-config.workspace = true
 tui-core.workspace = true
 tui-provider.workspace = true
 tui-session.workspace = true

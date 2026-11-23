@@ -1,8 +1,11 @@
 name: CI
 
-# Setiap PR dan push ke main melewati gerbang yang SAMA dengan check.ps1/check.sh:
-# fmt -> clippy -> test -> deny. Matriks: Linux + Windows (keduanya terverifikasi
-# native); macOS ditempatkan sebagai allow-failure (belum ada mesin verifikasi).
+# Gerbang wajib sebelum merge. Setiap job adalah required check di ruleset
+# `main-protection` (lihat scripts/setup-github.sh):
+#   fmt · clippy (Linux/Windows) · test (Linux/Windows; macOS allow-failure)
+#   build-release · deny · msrv · pr-title · dependency-review
+#
+# E2E memakai mock gateway; tidak ada kunci nyata di CI.
 
 on:
   push:
@@ -10,15 +13,56 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
-  # E2E memakai mock gateway (self-contained) — tidak butuh kunci nyata.
+  RUST_BACKTRACE: 1
   MODELUXAI_API_KEY: ci-kunci-mock-tidak-nyata
 
 jobs:
-  gate:
-    name: gate (${{ matrix.os }})
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy-${{ matrix.os }}
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # macOS belum punya mesin verifikasi manual; jangan blokir merge sampai
+    # verifikasi macOS pertama selesai.
     continue-on-error: ${{ matrix.os == 'macos-latest' }}
     strategy:
       fail-fast: false
@@ -26,35 +70,94 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          components: clippy, rustfmt
+          shared-key: test-${{ matrix.os }}
+      - name: cargo test
+        # Serialisasi test: E2E relay/subagent sensitif terhadap beban paralel.
+        env:
+          RUST_TEST_THREADS: "1"
+        run: cargo test --workspace --locked
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+  build-release:
+    name: build-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          shared-key: build-release
+      - name: cargo build --release
+        run: cargo build --release --locked -p tui-app
 
-      - name: fmt
-        run: cargo fmt --check
-
-      - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: test
-        run: cargo test --workspace
-
-      - name: install cargo-deny
-        run: cargo install cargo-deny --locked
-
-      - name: deny
+  deny:
+    name: deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: cargo deny
         run: cargo deny check --hide-inclusion-graph
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust 1.89 (MSRV)
+        uses: dtolnay/rust-toolchain@1.89.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv-1.89
+      - name: cargo check (MSRV)
+        # `+1.89.0` menimpa rust-toolchain.toml (channel stable).
+        run: cargo +1.89.0 check --workspace --all-targets --locked
+
+  pr-title:
+    name: pr-title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: feat, fix, docs, refactor, perf, test, build, ci, chore, revert
+          requireScope: false
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            Judul PR harus mengikuti Conventional Commits:
+            `tipe(scope): ringkasan` — contoh `fix(relay): tolak room asing`.
+
+  dependency-review:
+    name: dependency-review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Review dependency diff
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

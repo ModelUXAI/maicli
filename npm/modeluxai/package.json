@@ -1,0 +1,34 @@
+{
+  "name": "@modeluxai/cli",
+  "version": "0.1.0",
+  "description": "ModeluXAI maicli \u2014 agen AI terminal-first (biner Rust prebuilt). Instal: npm install -g @modeluxai/cli",
+  "license": "MIT",
+  "homepage": "https://github.com/ModelUXAI/maicli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ModelUXAI/maicli"
+  },
+  "bin": {
+    "maicli": "bin/maicli.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "terminal",
+    "coding-agent",
+    "rust"
+  ],
+  "optionalDependencies": {
+    "modeluxai-linux-x64": "0.1.0",
+    "modeluxai-darwin-arm64": "0.1.0",
+    "modeluxai-darwin-x64": "0.1.0",
+    "modeluxai-win32-x64": "0.1.0"
+  }
+}

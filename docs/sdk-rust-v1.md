@@ -1,7 +1,7 @@
 # SDK Rust v1 (`tui-sdk`)
 
 Status: **DONE (v1 awal)** — dikerjakan 2026-11-18 sebagai item P1 dari
-`docs/platform-dan-integrasi.md`. Permukaan ini dijanjikan stabil selama `v1`:
+dokumen roadmap internal (tidak dipublikasikan). Permukaan ini dijanjikan stabil selama `v1`:
 perubahan yang memutus API harus menaikkan versi major dan dicatat di CHANGELOG.
 
 ## Tujuan
@@ -12,7 +12,7 @@ tingkat, kontrol abort/pause/model, dan tool set yang bisa diganti.
 
 Bukan bagian v1: MCP, subagent, collab/WebSocket, server HTTP, API ekstensi,
 platform Linux/macOS — semuanya masih di luar scope (lihat
-`docs/platform-dan-integrasi.md`).
+dokumen roadmap internal (tidak dipublikasikan)).
 
 ## Bentuk API
 
@@ -73,7 +73,7 @@ embedder tidak perlu menyentuh `tokio::mpsc` langsung.
 | `next().await` | event berikutnya; `None` = kanal tutup |
 | `try_next()` | ambil event yang sudah antre |
 
-Urutan event satu turn mengikuti `docs/paritas.md`: `agent_start` →
+Urutan event satu turn mengikuti ledger paritas internal (tidak dipublikasikan): `agent_start` →
 (`turn_start` → event pesan/tool)* → `turn_end` → `agent_end`. Pasangan
 `message_start`/`message_end` dijamin lengkap, termasuk jalur abort/error.
 

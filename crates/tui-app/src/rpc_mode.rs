@@ -38,6 +38,9 @@ type HostPendingMap = Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<HostT
 /// Hasil eksekusi tool host.
 type HostToolOutcome = (bool, String);
 
+/// Dialog `ask` kaya yang menunggu jawaban: (id, opsi, pengirim).
+type AskDialogPending = std::sync::Mutex<Option<(String, Vec<String>, oneshot::Sender<String>)>>;
+
 /// Pemetaan id → pengirim hasil host URI yang belum dijawab.
 type HostUriPendingMap = Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<HostUriOutcome>>>>;
 
@@ -181,11 +184,7 @@ fn settings(boot: &Boot) -> TurnSettings {
         deadline: Some(std::time::Duration::from_secs(
             boot.limits.turn_deadline_secs,
         )),
-        system_prompt: {
-            let mut sp = TurnSettings::default().system_prompt;
-            sp.push_str(&tui_tools::skills::ringkas_daftar(&boot.skills));
-            sp
-        },
+        system_prompt: crate::features::base_system_prompt(boot, true),
         ..TurnSettings::default()
     }
 }
@@ -617,7 +616,35 @@ fn emit(out: &Out, frame: RpcFrame) {
     out.emit(frame);
 }
 
-fn handle_ask(request: AskRequest, out: &Out, pending: &mut Option<oneshot::Sender<String>>) {
+fn handle_ask(
+    request: AskRequest,
+    out: &Out,
+    pending: &mut Option<oneshot::Sender<String>>,
+    dialog_aktif: &std::sync::Mutex<bool>,
+    dialog_pending: &AskDialogPending,
+) {
+    let aktif = dialog_aktif.lock().map(|v| *v).unwrap_or(false);
+    if aktif && !request.options.is_empty() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let id = format!("ask-{nanos:x}");
+        emit(
+            out,
+            RpcFrame::AskDialog {
+                id: id.clone(),
+                question: request.question,
+                options: request.options.clone(),
+                recommended: request.recommended,
+                timeout_secs: tui_tools::ASK_TIMEOUT_SECS,
+            },
+        );
+        if let Ok(mut slot) = dialog_pending.lock() {
+            *slot = Some((id, request.options, request.reply));
+        }
+        return;
+    }
     emit(
         out,
         RpcFrame::Question {
@@ -635,6 +662,34 @@ fn handle_answer(text: String, pending: &mut Option<oneshot::Sender<String>>) ->
         }
         None => false,
     }
+}
+
+/// Jawab dialog `ask` kaya; `false` bila id tidak cocok/tidak ada.
+fn handle_ask_dialog_answer(
+    id: &str,
+    selected: Option<u32>,
+    text: String,
+    pending: &AskDialogPending,
+) -> bool {
+    let slot = match pending.lock() {
+        Ok(mut slot) => slot.take(),
+        Err(_) => return false,
+    };
+    let Some((dialog_id, options, reply)) = slot else {
+        return false;
+    };
+    if dialog_id != id {
+        return false;
+    }
+    let jawaban = match selected {
+        Some(index) => options
+            .get(index as usize)
+            .cloned()
+            .unwrap_or_else(|| index.to_string()),
+        None => text,
+    };
+    let _ = reply.send(jawaban);
+    true
 }
 
 /// Permintaan approval yang menunggu keputusan klien RPC.
@@ -866,7 +921,8 @@ pub async fn run(boot: Boot) -> Result<(), MxError> {
         boot.grants_path.clone(),
         boot.grant_ttl,
     )?);
-    let (events_tx, events_rx, event_log_done) = crate::event_log::channel(boot.event_log.clone());
+    let (events_tx, events_rx, event_log_done) =
+        crate::event_log::channel_with_recorder(boot.recorder.clone());
     if boot.approval.mode == tui_approval::ApprovalMode::Yolo {
         let _ = events_tx.send(AgentEvent::Notice {
             text: crate::banner::yolo_banner().to_string(),
@@ -880,7 +936,7 @@ pub async fn run(boot: Boot) -> Result<(), MxError> {
         state: uri_state.clone(),
         seq: host_seq.clone(),
     });
-    let session = AgentSession::new(
+    let mut session = AgentSession::new(
         Arc::new(boot.client.clone()),
         approver,
         boot.tool_registry(),
@@ -888,6 +944,7 @@ pub async fn run(boot: Boot) -> Result<(), MxError> {
         settings(&boot),
         events_tx,
     );
+    crate::hooks::pasang(&mut session, &boot.config.hooks);
     let mcp_notes = boot.mcp_notes.clone();
     let result = run_with_session(
         boot,
@@ -1014,6 +1071,12 @@ async fn run_with_session(
     });
 
     let mut pending_answer: Option<oneshot::Sender<String>> = None;
+    // Dialog `ask` kaya (set_ask_dialog): klien dapat memilih opsi atau teks.
+    let ask_dialog_aktif = Arc::new(std::sync::Mutex::new(false));
+    // Langganan event subagent: saat aktif, task meneruskan event anak.
+    let subagent_sub = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // (id, opsi, pengirim jawaban) — opsi dipakai untuk memetakan indeks.
+    let ask_dialog_pending: Arc<AskDialogPending> = Arc::new(std::sync::Mutex::new(None));
     let mut pending_approvals: HashMap<String, oneshot::Sender<Decision>> = HashMap::new();
     let mut next_approval_id: u64 = 0;
     // Antrean prompt saat turn berjalan (omp: queue modes) — batas 8.
@@ -1027,7 +1090,13 @@ async fn run_with_session(
                 None => break,
             },
             Some(request) = ask_rx.recv() => {
-                handle_ask(request, &out, &mut pending_answer);
+                handle_ask(
+                    request,
+                    &out,
+                    &mut pending_answer,
+                    &ask_dialog_aktif,
+                    &ask_dialog_pending,
+                );
                 continue;
             }
             Some(ask) = approval_rx.recv() => {
@@ -1050,6 +1119,21 @@ async fn run_with_session(
             Incoming::Request(request) => request,
         };
         match request {
+            RpcRequest::UiDialogRequest { id, method, params } => {
+                emit(&out, RpcFrame::UiDialogRequest { id, method, params })
+            }
+            RpcRequest::UiDialogAnswer {
+                id,
+                value,
+                cancelled,
+            } => emit(
+                &out,
+                RpcFrame::UiDialogAnswer {
+                    id,
+                    value,
+                    cancelled,
+                },
+            ),
             RpcRequest::NegotiateProtocol {
                 id,
                 protocol_version,
@@ -1148,6 +1232,23 @@ async fn run_with_session(
                     message: "tidak ada approval aktif".to_string(),
                 },
             ),
+            RpcRequest::SetAskDialog { id, enabled } => {
+                *ask_dialog_aktif.lock().unwrap_or_else(|e| e.into_inner()) = enabled;
+                emit(&out, RpcFrame::AskDialogConfigured { id, enabled });
+            }
+            RpcRequest::AskDialogAnswer { id, selected, text } => {
+                let answered = handle_ask_dialog_answer(&id, selected, text, &ask_dialog_pending);
+                if !answered {
+                    emit(
+                        &out,
+                        RpcFrame::Error {
+                            id: None,
+                            code: ErrorCode::Protocol.to_string(),
+                            message: format!("tidak ada dialog ask aktif dengan id {id}"),
+                        },
+                    );
+                }
+            }
             RpcRequest::Answer { .. } => emit(
                 &out,
                 RpcFrame::Error {
@@ -1172,6 +1273,49 @@ async fn run_with_session(
                 // Kirim ulang frame yang tertahan (spool) lalu kosongkan.
                 let jumlah = out.mainkan_spool();
                 emit(&out, RpcFrame::SpoolReplayed { jumlah });
+                emit(&out, RpcFrame::Ack { id });
+            }
+            RpcRequest::SetSubagentSubscription { id, enabled } => {
+                subagent_sub.store(enabled, std::sync::atomic::Ordering::SeqCst);
+                if enabled && let Some(manager) = boot.subagents.clone() {
+                    // Pemantau roster: anak yang muncul setelah langganan juga
+                    // ikut diteruskan (polling 300 ms, tanpa memblokir loop).
+                    let out_anak = out.clone();
+                    let aktif = subagent_sub.clone();
+                    tokio::spawn(async move {
+                        let mut terlihat: std::collections::HashSet<String> =
+                            std::collections::HashSet::new();
+                        while aktif.load(std::sync::atomic::Ordering::SeqCst) {
+                            for handle in manager.list() {
+                                if !terlihat.insert(handle.id.clone()) {
+                                    continue;
+                                }
+                                let child_id = handle.id.clone();
+                                let mut events = handle.events().await;
+                                let out_child = out_anak.clone();
+                                let aktif_child = aktif.clone();
+                                tokio::spawn(async move {
+                                    while let Some(event) = events.recv().await {
+                                        if !aktif_child.load(std::sync::atomic::Ordering::SeqCst) {
+                                            continue;
+                                        }
+                                        let Some((nama, payload)) =
+                                            crate::features::ringkas_event_anak(&event)
+                                        else {
+                                            continue;
+                                        };
+                                        out_child.emit(RpcFrame::SubagentEvent {
+                                            agent: child_id.clone(),
+                                            event: nama.to_string(),
+                                            payload: payload.to_string(),
+                                        });
+                                    }
+                                });
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                        }
+                    });
+                }
                 emit(&out, RpcFrame::Ack { id });
             }
             RpcRequest::SubagentList { id } => {
@@ -1361,6 +1505,14 @@ async fn run_with_session(
                         emit(&out, RpcFrame::CommandOutput { text: teks });
                         emit(&out, RpcFrame::Ack { id });
                     }
+                    tui_core::CommandResult::Feature { name, .. } => emit(
+                        &out,
+                        RpcFrame::Error {
+                            id: Some(id),
+                            code: ErrorCode::Protocol.to_string(),
+                            message: format!("perintah /{name} hanya tersedia di mode TUI/teks"),
+                        },
+                    ),
                     lain => emit(
                         &out,
                         RpcFrame::Error {
@@ -1527,228 +1679,263 @@ async fn run_with_session(
                     let mut run = std::pin::pin!(session.run_turn(Some(message)));
                     loop {
                         tokio::select! {
-                            result = &mut run => break result,
-                            Some(request) = ask_rx.recv() => {
-                                handle_ask(request, &out, &mut pending_answer);
-                            }
-                            Some(ask) = approval_rx.recv() => {
-                                handle_approval_request(
-                                    ask,
-                                    &out,
-                                    &mut pending_approvals,
-                                    &mut next_approval_id,
-                                );
-                            }
-                            Some(next) = incoming_rx.recv() => match next {
-                                Incoming::Request(RpcRequest::Abort { .. }) => {
-                                    token.cancel();
-                                    let _ = batalkan_host_tools(&out, &host_pending, &host_seq);
-                                    let _ = batalkan_host_uri(&out, &uri_state, &host_seq);
+                                    result = &mut run => break result,
+                                    Some(request) = ask_rx.recv() => {
+                                        handle_ask(
+                            request,
+                            &out,
+                            &mut pending_answer,
+                            &ask_dialog_aktif,
+                            &ask_dialog_pending,
+                        );
+                                    }
+                                    Some(ask) = approval_rx.recv() => {
+                                        handle_approval_request(
+                                            ask,
+                                            &out,
+                                            &mut pending_approvals,
+                                            &mut next_approval_id,
+                                        );
+                                    }
+                                    Some(next) = incoming_rx.recv() => match next {
+                                        Incoming::Request(RpcRequest::Abort { .. }) => {
+                                            token.cancel();
+                                            let _ = batalkan_host_tools(&out, &host_pending, &host_seq);
+                                            let _ = batalkan_host_uri(&out, &uri_state, &host_seq);
+                                        }
+                                        Incoming::Request(RpcRequest::Shutdown) => {
+                                            token.cancel();
+                                            let _ = batalkan_host_tools(&out, &host_pending, &host_seq);
+                                            let _ = batalkan_host_uri(&out, &uri_state, &host_seq);
+                                        }
+                                        Incoming::Request(RpcRequest::Approval { id, decision }) => {
+                                            if !handle_approval_decision(&id, &decision, &mut pending_approvals) {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: None,
+                                                        code: ErrorCode::Protocol.to_string(),
+                                                        message: format!("tidak ada approval aktif dengan id {id}"),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        Incoming::Request(RpcRequest::SetSubagentSubscription { id, enabled }) => {
+                                    subagent_sub.store(enabled, std::sync::atomic::Ordering::SeqCst);
+                                    emit(&out, RpcFrame::Ack { id });
                                 }
-                                Incoming::Request(RpcRequest::Shutdown) => {
-                                    token.cancel();
-                                    let _ = batalkan_host_tools(&out, &host_pending, &host_seq);
-                                    let _ = batalkan_host_uri(&out, &uri_state, &host_seq);
+                                Incoming::Request(RpcRequest::SetAskDialog { id, enabled }) => {
+                                    if let Ok(mut aktif) = ask_dialog_aktif.lock() {
+                                        *aktif = enabled;
+                                    }
+                                    emit(&out, RpcFrame::AskDialogConfigured { id, enabled });
                                 }
-                                Incoming::Request(RpcRequest::Approval { id, decision }) => {
-                                    if !handle_approval_decision(&id, &decision, &mut pending_approvals) {
+                                Incoming::Request(RpcRequest::AskDialogAnswer { id, selected, text }) => {
+                                    if !handle_ask_dialog_answer(
+                                        &id,
+                                        selected,
+                                        text,
+                                        &ask_dialog_pending,
+                                    ) {
                                         emit(
                                             &out,
                                             RpcFrame::Error {
                                                 id: None,
                                                 code: ErrorCode::Protocol.to_string(),
-                                                message: format!("tidak ada approval aktif dengan id {id}"),
+                                                message: format!(
+                                                    "tidak ada dialog ask aktif dengan id {id}"
+                                                ),
                                             },
                                         );
                                     }
                                 }
                                 Incoming::Request(RpcRequest::Answer { text, .. }) => {
-                                    if !handle_answer(text, &mut pending_answer) {
-                                        emit(
-                                            &out,
-                                            RpcFrame::Error {
-                                                id: None,
-                                                code: ErrorCode::Protocol.to_string(),
-                                                message: "tidak ada pertanyaan aktif".to_string(),
-                                            },
-                                        );
-                                    }
-                                }
-                                Incoming::Request(RpcRequest::Ping { id: ping_id }) => {
-                                    emit(&out, RpcFrame::Pong { id: ping_id });
-                                }
-                                Incoming::Request(RpcRequest::HostUriResult {
-                                    id,
-                                    content,
-                                }) => {
-                                    let diteruskan = match uri_state.pending.lock() {
-                                        Ok(mut pending) => match pending.remove(&id) {
-                                            Some(sender) => sender.send(content).is_ok(),
-                                            None => false,
-                                        },
-                                        Err(_) => false,
-                                    };
-                                    if !diteruskan {
-                                        emit(
-                                            &out,
-                                            RpcFrame::Error {
-                                                id: None,
-                                                code: ErrorCode::Protocol.to_string(),
-                                                message: format!(
-                                                    "tidak ada host uri aktif dengan id {id}"
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
-                                Incoming::Request(RpcRequest::HostToolResult {
-                                    id,
-                                    is_error,
-                                    content,
-                                }) => {
-                                    let diteruskan = match host_pending.lock() {
-                                        Ok(mut pending) => match pending.remove(&id) {
-                                            Some(sender) => sender.send((is_error, content)).is_ok(),
-                                            None => false,
-                                        },
-                                        Err(_) => false,
-                                    };
-                                    if !diteruskan {
-                                        emit(
-                                            &out,
-                                            RpcFrame::Error {
-                                                id: None,
-                                                code: ErrorCode::Protocol.to_string(),
-                                                message: format!(
-                                                    "tidak ada host tool aktif dengan id {id}"
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
-                                Incoming::Request(RpcRequest::AbortAndRestoreQueue { id }) => {
-                                    token.cancel();
-                                    let isi: Vec<tui_wire::rpc::QueuedItem> = antrean
-                                        .drain(..)
-                                        .map(|(qid, pesan)| tui_wire::rpc::QueuedItem {
-                                            id: qid,
-                                            message: pesan,
-                                        })
-                                        .collect();
-                                    emit(
-                                        &out,
-                                        RpcFrame::QueueRestored { items: isi },
-                                    );
-                                    let _ = batalkan_host_tools(&out, &host_pending, &host_seq);
-                                    let _ = batalkan_host_uri(&out, &uri_state, &host_seq);
-                                    if !id.is_empty() {
-                                        emit(&out, RpcFrame::Ack { id });
-                                    }
-                                }
-                                Incoming::Request(RpcRequest::RemoveQueuedMessage { id, index }) => {
-                                    let posisi = index as usize;
-                                    let hasil = antrean.get(posisi).map(|_| ());
-                                    match hasil {
-                                        Some(()) => {
-                                            let (qid_dibuang, _) =
-                                                antrean.remove(posisi).unwrap_or_default();
-                                            emit(
-                                                &out,
-                                                RpcFrame::Event {
-                                                    event: RpcEvent::Notice {
-                                                        text: format!(
-                                                            "antrean {posisi} dibuang ({qid_dibuang})"
+                                            if !handle_answer(text, &mut pending_answer) {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: None,
+                                                        code: ErrorCode::Protocol.to_string(),
+                                                        message: "tidak ada pertanyaan aktif".to_string(),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        Incoming::Request(RpcRequest::Ping { id: ping_id }) => {
+                                            emit(&out, RpcFrame::Pong { id: ping_id });
+                                        }
+                                        Incoming::Request(RpcRequest::HostUriResult {
+                                            id,
+                                            content,
+                                        }) => {
+                                            let diteruskan = match uri_state.pending.lock() {
+                                                Ok(mut pending) => match pending.remove(&id) {
+                                                    Some(sender) => sender.send(content).is_ok(),
+                                                    None => false,
+                                                },
+                                                Err(_) => false,
+                                            };
+                                            if !diteruskan {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: None,
+                                                        code: ErrorCode::Protocol.to_string(),
+                                                        message: format!(
+                                                            "tidak ada host uri aktif dengan id {id}"
                                                         ),
                                                     },
-                                                },
-                                            )
+                                                );
+                                            }
                                         }
-                                        None => emit(
+                                        Incoming::Request(RpcRequest::HostToolResult {
+                                            id,
+                                            is_error,
+                                            content,
+                                        }) => {
+                                            let diteruskan = match host_pending.lock() {
+                                                Ok(mut pending) => match pending.remove(&id) {
+                                                    Some(sender) => sender.send((is_error, content)).is_ok(),
+                                                    None => false,
+                                                },
+                                                Err(_) => false,
+                                            };
+                                            if !diteruskan {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: None,
+                                                        code: ErrorCode::Protocol.to_string(),
+                                                        message: format!(
+                                                            "tidak ada host tool aktif dengan id {id}"
+                                                        ),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        Incoming::Request(RpcRequest::AbortAndRestoreQueue { id }) => {
+                                            token.cancel();
+                                            let isi: Vec<tui_wire::rpc::QueuedItem> = antrean
+                                                .drain(..)
+                                                .map(|(qid, pesan)| tui_wire::rpc::QueuedItem {
+                                                    id: qid,
+                                                    message: pesan,
+                                                })
+                                                .collect();
+                                            emit(
+                                                &out,
+                                                RpcFrame::QueueRestored { items: isi },
+                                            );
+                                            let _ = batalkan_host_tools(&out, &host_pending, &host_seq);
+                                            let _ = batalkan_host_uri(&out, &uri_state, &host_seq);
+                                            if !id.is_empty() {
+                                                emit(&out, RpcFrame::Ack { id });
+                                            }
+                                        }
+                                        Incoming::Request(RpcRequest::RemoveQueuedMessage { id, index }) => {
+                                            let posisi = index as usize;
+                                            let hasil = antrean.get(posisi).map(|_| ());
+                                            match hasil {
+                                                Some(()) => {
+                                                    let (qid_dibuang, _) =
+                                                        antrean.remove(posisi).unwrap_or_default();
+                                                    emit(
+                                                        &out,
+                                                        RpcFrame::Event {
+                                                            event: RpcEvent::Notice {
+                                                                text: format!(
+                                                                    "antrean {posisi} dibuang ({qid_dibuang})"
+                                                                ),
+                                                            },
+                                                        },
+                                                    )
+                                                }
+                                                None => emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: Some(id),
+                                                        code: ErrorCode::Protocol.to_string(),
+                                                        message: format!(
+                                                            "posisi antrean {posisi} tidak ada (isi {})",
+                                                            antrean.len()
+                                                        ),
+                                                    },
+                                                ),
+                                            }
+                                        }
+                                        Incoming::Request(RpcRequest::PromoteQueuedMessage {
+                                            id,
+                                            index,
+                                        }) => {
+                                            let posisi = index as usize;
+                                            if posisi < antrean.len() {
+                                                let item = antrean.remove(posisi);
+                                                if let Some(item) = item {
+                                                    antrean.push_front(item);
+                                                }
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Event {
+                                                        event: RpcEvent::Notice {
+                                                            text: format!(
+                                                                "antrean {posisi} dinaikkan ke depan"
+                                                            ),
+                                                        },
+                                                    },
+                                                );
+                                            } else {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: Some(id),
+                                                        code: ErrorCode::Protocol.to_string(),
+                                                        message: format!(
+                                                            "posisi antrean {posisi} tidak ada (isi {})",
+                                                            antrean.len()
+                                                        ),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        Incoming::Request(RpcRequest::Prompt {
+                                            id: qid,
+                                            message: qmsg,
+                                        }) => {
+                                            if antrean.len() >= 8 {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Error {
+                                                        id: Some(qid),
+                                                        code: ErrorCode::AgentBusy.to_string(),
+                                                        message: "antrean penuh (8); kirim lebih lambat"
+                                                            .to_string(),
+                                                    },
+                                                );
+                                            } else {
+                                                emit(
+                                                    &out,
+                                                    RpcFrame::Event {
+                                                        event: RpcEvent::Notice {
+                                                            text: format!(
+                                                                "prompt masuk antrean (posisi {})",
+                                                                antrean.len() + 1
+                                                            ),
+                                                        },
+                                                    },
+                                                );
+                                                antrean.push_back((qid, qmsg));
+                                            }
+                                        }
+                                        _ => emit(
                                             &out,
                                             RpcFrame::Error {
-                                                id: Some(id),
-                                                code: ErrorCode::Protocol.to_string(),
-                                                message: format!(
-                                                    "posisi antrean {posisi} tidak ada (isi {})",
-                                                    antrean.len()
-                                                ),
+                                                id: Some(id.clone()),
+                                                code: ErrorCode::AgentBusy.to_string(),
+                                                message: "turn masih berjalan; kirim abort atau tunggu".to_string(),
                                             },
                                         ),
-                                    }
-                                }
-                                Incoming::Request(RpcRequest::PromoteQueuedMessage {
-                                    id,
-                                    index,
-                                }) => {
-                                    let posisi = index as usize;
-                                    if posisi < antrean.len() {
-                                        let item = antrean.remove(posisi);
-                                        if let Some(item) = item {
-                                            antrean.push_front(item);
-                                        }
-                                        emit(
-                                            &out,
-                                            RpcFrame::Event {
-                                                event: RpcEvent::Notice {
-                                                    text: format!(
-                                                        "antrean {posisi} dinaikkan ke depan"
-                                                    ),
-                                                },
-                                            },
-                                        );
-                                    } else {
-                                        emit(
-                                            &out,
-                                            RpcFrame::Error {
-                                                id: Some(id),
-                                                code: ErrorCode::Protocol.to_string(),
-                                                message: format!(
-                                                    "posisi antrean {posisi} tidak ada (isi {})",
-                                                    antrean.len()
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
-                                Incoming::Request(RpcRequest::Prompt {
-                                    id: qid,
-                                    message: qmsg,
-                                }) => {
-                                    if antrean.len() >= 8 {
-                                        emit(
-                                            &out,
-                                            RpcFrame::Error {
-                                                id: Some(qid),
-                                                code: ErrorCode::AgentBusy.to_string(),
-                                                message: "antrean penuh (8); kirim lebih lambat"
-                                                    .to_string(),
-                                            },
-                                        );
-                                    } else {
-                                        emit(
-                                            &out,
-                                            RpcFrame::Event {
-                                                event: RpcEvent::Notice {
-                                                    text: format!(
-                                                        "prompt masuk antrean (posisi {})",
-                                                        antrean.len() + 1
-                                                    ),
-                                                },
-                                            },
-                                        );
-                                        antrean.push_back((qid, qmsg));
-                                    }
-                                }
-                                _ => emit(
-                                    &out,
-                                    RpcFrame::Error {
-                                        id: Some(id.clone()),
-                                        code: ErrorCode::AgentBusy.to_string(),
-                                        message: "turn masih berjalan; kirim abort atau tunggu".to_string(),
                                     },
-                                ),
-                            },
-                        }
+                                }
                     }
                 };
                 match outcome {
@@ -2104,7 +2291,7 @@ mod tests {
                 .any(|n| n.starts_with("host.")),
             "tool host harus terhapus"
         );
-        assert_eq!(session.registry_mut().names().len(), 8, "tool v1 tetap");
+        assert_eq!(session.registry_mut().names().len(), 17, "tool v1 tetap");
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
@@ -2238,7 +2425,16 @@ mod tests {
             grant_ttl: None,
             ui: tui_config::UiConfig::default(),
             models: Vec::new(),
-            event_log: None,
+            recorder: crate::event_log::Recorder::new(dir.join("events.jsonl"), false),
+            config: tui_config::Config::default(),
+            memory: None,
+            context_files: Vec::new(),
+            context_notes: Vec::new(),
+            annotations: Vec::new(),
+            notifications: Vec::new(),
+            plan: String::new(),
+            tool_issues: Vec::new(),
+            system_prompt: String::new(),
             mcp_tools: Vec::new(),
             mcp_notes: Vec::new(),
             subagents: None,
@@ -2793,19 +2989,53 @@ mod tests {
         assert!(line.contains(r#""target_id":"uri-9""#), "{line}");
         assert_eq!(batalkan_host_uri(&out, &state, &seq), 0);
     }
+    #[test]
+    fn ask_dialog_answer_memetakan_opsi_dan_text() {
+        let (reply, mut answer) = oneshot::channel();
+        let pending: std::sync::Mutex<_> = std::sync::Mutex::new(Some((
+            "d1".to_string(),
+            vec!["satu".to_string(), "dua".to_string()],
+            reply,
+        )));
+        assert!(handle_ask_dialog_answer(
+            "d1",
+            Some(1),
+            String::new(),
+            &pending
+        ));
+        assert_eq!(answer.try_recv().ok(), Some("dua".to_string()));
+        let (reply, mut answer) = oneshot::channel();
+        let pending: std::sync::Mutex<_> =
+            std::sync::Mutex::new(Some(("d2".to_string(), Vec::new(), reply)));
+        assert!(handle_ask_dialog_answer(
+            "d2",
+            None,
+            "bebas".into(),
+            &pending
+        ));
+        assert_eq!(answer.try_recv().ok(), Some("bebas".to_string()));
+        assert!(!handle_ask_dialog_answer("x", None, "y".into(), &pending));
+    }
+
     #[tokio::test]
     async fn handle_ask_mengirim_frame_dan_menyimpan_pending() {
         let (sink, mut rx) = tokio::sync::mpsc::channel::<String>(64);
         let out = Out::new(sink, spool_uji());
         let (reply, answer) = oneshot::channel();
         let mut pending = None;
+        let dialog_aktif = std::sync::Mutex::new(false);
+        let dialog_pending = std::sync::Mutex::new(None);
         handle_ask(
             AskRequest {
                 question: "lanjut?".to_string(),
                 reply,
+                options: Vec::new(),
+                recommended: None,
             },
             &out,
             &mut pending,
+            &dialog_aktif,
+            &dialog_pending,
         );
         let line = rx.recv().await.expect("frame question terkirim");
         assert!(line.contains(r#""type":"question""#), "{line}");

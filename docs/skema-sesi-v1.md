@@ -27,6 +27,7 @@ bukan edit diam-diam.
 | `compaction` | `id`,`parent_id`,`timestamp`,`summary`,`replaced_messages` | tidak (ringkasan dipakai terpisah) |
 | `title_change` | `id`,`timestamp`,`title` | tidak |
 | `approval_decision` | `id`,`timestamp`,`tool`,`subject`,`tier`,`decision` | tidak |
+| `pin` | `id`,`timestamp`,`index` (1-based),`pinned`,`preview` | tidak |
 | `session_init` | `id`,`timestamp`,`cwd`,`app_version` | tidak |
 
 `parent_id` menyiapkan percabangan (fork): id entry induk, atau `null` untuk akar.

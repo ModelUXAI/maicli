@@ -247,10 +247,10 @@ fn rpc_mengizinkan_tool_lewat_frame_approval() {
     let reader = std::thread::spawn(move || {
         for line in BufReader::new(stdout).lines() {
             let Ok(line) = line else { return };
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
-                if tx.send(value).is_err() {
-                    return;
-                }
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line)
+                && tx.send(value).is_err()
+            {
+                return;
             }
         }
     });
@@ -686,7 +686,7 @@ fn mode_relay_ws_room_control_guest() {
                 "models.default=mock-model",
             ])
             .env("MODELUXAI_API_KEY", "kunci-uji-tidak-nyata")
-            .env("MAICLI_RELAY_KEY", "kunci-room-uji")
+            .env("MAICLI_RELAY_KEY", "roomA=ka,roomB=kb")
             .env("MAICLI_DATA_DIR", dir.join("maicli-data"))
             .spawn()
             .expect("jalankan maicli relay");
@@ -705,14 +705,14 @@ fn mode_relay_ws_room_control_guest() {
         let (mut ws1, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
             .await
             .expect("ws1 connect");
-        ws1.send(Ws::text(r#"{"join":"kunci-room-uji"}"#))
+        ws1.send(Ws::text(r#"{"join":"roomA:ka"}"#))
             .await
             .expect("join1");
         // Klien 2 (guest).
         let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
             .await
             .expect("ws2 connect");
-        ws2.send(Ws::text(r#"{"join":"kunci-room-uji"}"#))
+        ws2.send(Ws::text(r#"{"join":"roomA:ka"}"#))
             .await
             .expect("join2");
         // Control prompt → broadcast prompt + jawab sampai ke keduanya.
@@ -721,20 +721,18 @@ fn mode_relay_ws_room_control_guest() {
             .expect("prompt");
         let mut jawab1 = false;
         let mut jawab2 = false;
-        for _ in 0..40 {
+        for _ in 0..80 {
             if let Ok(Some(Ok(Ws::Text(teks)))) =
-                tokio::time::timeout(Duration::from_millis(300), ws1.next()).await
+                tokio::time::timeout(Duration::from_millis(500), ws1.next()).await
+                && teks.contains(r#""event":"jawab""#)
             {
-                if teks.contains(r#""event":"jawab""#) {
-                    jawab1 = true;
-                }
+                jawab1 = true;
             }
             if let Ok(Some(Ok(Ws::Text(teks)))) =
-                tokio::time::timeout(Duration::from_millis(300), ws2.next()).await
+                tokio::time::timeout(Duration::from_millis(500), ws2.next()).await
+                && teks.contains(r#""event":"jawab""#)
             {
-                if teks.contains(r#""event":"jawab""#) {
-                    jawab2 = true;
-                }
+                jawab2 = true;
             }
             if jawab1 && jawab2 {
                 break;
@@ -749,9 +747,9 @@ fn mode_relay_ws_room_control_guest() {
             .await
             .expect("prompt guest");
         let mut ditolak = false;
-        for _ in 0..10 {
+        for _ in 0..20 {
             if let Ok(Some(Ok(Ws::Text(teks)))) =
-                tokio::time::timeout(Duration::from_millis(300), ws2.next()).await
+                tokio::time::timeout(Duration::from_millis(500), ws2.next()).await
                 && teks.contains("guest tidak boleh")
             {
                 ditolak = true;
@@ -763,7 +761,7 @@ fn mode_relay_ws_room_control_guest() {
         let (mut ws3, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
             .await
             .expect("ws3");
-        ws3.send(Ws::text(r#"{"join":"salah"}"#))
+        ws3.send(Ws::text(r#"{"join":"roomA:salah"}"#))
             .await
             .expect("join3");
         let jawab_salah = tokio::time::timeout(Duration::from_secs(2), ws3.next()).await;
@@ -771,6 +769,55 @@ fn mode_relay_ws_room_control_guest() {
             matches!(jawab_salah, Ok(Some(Ok(Ws::Text(t)))) if t.contains("kunci room salah")),
             "kunci salah harus ditolak"
         );
+        // Multi-room: env `room=kunci,room2=kunci2`; join salah nama room ditolak.
+        let (mut ws4, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
+            .await
+            .expect("ws4");
+        ws4.send(Ws::text(r#"{"join":"tidak-ada:kunci"}"#))
+            .await
+            .expect("join4");
+        let room_salah = tokio::time::timeout(Duration::from_secs(2), ws4.next()).await;
+        assert!(
+            matches!(room_salah, Ok(Some(Ok(Ws::Text(t)))) if t.contains("tidak ada")),
+            "room asing harus ditolak"
+        );
+        // Guest dengan mode view (`{"view":true}`) tetap menerima siaran.
+        let (mut ws5, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
+            .await
+            .expect("ws5");
+        ws5.send(Ws::text(r#"{"join":"roomA:ka","view":true}"#))
+            .await
+            .expect("join5");
+        let mut view_menerima = false;
+        for _ in 0..20 {
+            if let Ok(Some(Ok(Ws::Text(teks)))) =
+                tokio::time::timeout(Duration::from_millis(500), ws5.next()).await
+                && teks.contains(r#""peran":"View""#)
+            {
+                view_menerima = true;
+                break;
+            }
+        }
+        assert!(view_menerima, "view harus menerima join dengan peran View");
+        // Room kedua: join valid, tidak tercampur dengan roomA.
+        let (mut ws6, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
+            .await
+            .expect("ws6");
+        ws6.send(Ws::text(r#"{"join":"roomB:kb"}"#))
+            .await
+            .expect("join6");
+        let mut room_b = false;
+        for _ in 0..20 {
+            if let Ok(Some(Ok(Ws::Text(teks)))) =
+                tokio::time::timeout(Duration::from_millis(500), ws6.next()).await
+                && teks.contains(r#""room":"roomB""#)
+                && teks.contains(r#""event":"join""#)
+            {
+                room_b = true;
+                break;
+            }
+        }
+        assert!(room_b, "roomB harus join terpisah");
         let _ = server.kill();
         let _ = server.wait();
         let _ = std::fs::remove_dir_all(&dir);

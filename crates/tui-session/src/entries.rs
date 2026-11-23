@@ -134,6 +134,22 @@ pub enum SessionEntry {
         /// Keputusan yang diambil.
         decision: String,
     },
+    /// Penanda sematan pesan di timeline.
+    ///
+    /// `index` = nomor pesan 1-based pada transkrip sesi; `pinned=false`
+    /// melepas sematan tanpa menghapus riwayat.
+    Pin {
+        /// Id entry.
+        id: String,
+        /// Waktu entry ditulis.
+        timestamp: u64,
+        /// Nomor pesan (1-based).
+        index: u64,
+        /// Apakah pesan disematkan.
+        pinned: bool,
+        /// Cuplikan isi pesan saat disematkan.
+        preview: String,
+    },
     /// Penanda awal sesi (cwd, versi binary).
     SessionInit {
         /// Id entry.
@@ -155,6 +171,17 @@ impl SessionEntry {
             parent_id,
             timestamp: now_ms(),
             message,
+        }
+    }
+
+    /// Entry sematan pesan.
+    pub fn pin(index: u64, pinned: bool, preview: impl Into<String>) -> Self {
+        Self::Pin {
+            id: new_id(),
+            timestamp: now_ms(),
+            index,
+            pinned,
+            preview: preview.into(),
         }
     }
 
@@ -231,6 +258,7 @@ impl SessionEntry {
             | Self::Compaction { id, .. }
             | Self::TitleChange { id, .. }
             | Self::ApprovalDecision { id, .. }
+            | Self::Pin { id, .. }
             | Self::SessionInit { id, .. } => id,
         }
     }

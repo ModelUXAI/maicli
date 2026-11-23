@@ -21,13 +21,12 @@ pub fn prune_tool_results(messages: &mut [Message], keep_last: usize) -> usize {
     let cut = positions.len().saturating_sub(keep_last);
     let mut pruned = 0;
     for index in positions.into_iter().take(cut) {
-        if let Some(Message::ToolResult { content, .. }) = messages.get_mut(index) {
-            if content.as_str() != PRUNED_TOOL_RESULT
-                && content.chars().count() > PRUNED_TOOL_RESULT.chars().count()
-            {
-                *content = PRUNED_TOOL_RESULT.to_string();
-                pruned += 1;
-            }
+        if let Some(Message::ToolResult { content, .. }) = messages.get_mut(index)
+            && content.as_str() != PRUNED_TOOL_RESULT
+            && content.chars().count() > PRUNED_TOOL_RESULT.chars().count()
+        {
+            *content = PRUNED_TOOL_RESULT.to_string();
+            pruned += 1;
         }
     }
     pruned

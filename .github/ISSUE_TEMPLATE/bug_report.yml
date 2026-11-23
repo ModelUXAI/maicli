@@ -1,0 +1,61 @@
+name: Bug report
+description: Laporkan perilaku yang salah (bukan kerentanan keamanan)
+title: "[bug] "
+labels: ["fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Jangan laporkan kerentanan keamanan di issue publik — gunakan
+        Security → Report a vulnerability (lihat `SECURITY.md`).
+  - type: input
+    id: versi
+    attributes:
+      label: Versi / commit
+      description: Output `maicli --version` atau hash commit.
+      placeholder: "0.1.0 / fa3b440"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux x64
+        - Linux arm64
+        - Windows x64
+        - macOS arm64
+        - macOS x64
+        - Lainnya
+    validations:
+      required: true
+  - type: textarea
+    id: langkah
+    attributes:
+      label: Langkah reproduksi
+      description: Perintah persis, config, dan input yang memicu bug.
+      placeholder: |
+        1. jalankan `maicli --mode tui`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: harapan
+    attributes:
+      label: Perilaku yang diharapkan
+    validations:
+      required: true
+  - type: textarea
+    id: aktual
+    attributes:
+      label: Perilaku aktual + log
+      description: Tempel log (tanpa kunci API/token) atau screenshot.
+    validations:
+      required: true
+  - type: textarea
+    id: tambahan
+    attributes:
+      label: Konteks tambahan
+      description: Config yang relevan, gateway/model, atau catatan lain.
+    validations:
+      required: false

@@ -7,6 +7,9 @@
 #
 # Pemakaian: bash check.sh
 set -u
+# E2E relay/subagent sensitif terhadap beban paralel; serialkan test agar gate
+# deterministik. Bisa ditimpa: RUST_TEST_THREADS=8 bash check.sh
+export RUST_TEST_THREADS="${RUST_TEST_THREADS:-1}"
 failed=()
 
 invoke_gate() {
@@ -35,6 +38,8 @@ dependency_rules() {
     return 0
 }
 
+invoke_gate 'indeks dokumentasi' bash scripts/check-docs-index.sh
+invoke_gate 'tautan dokumentasi' python3 scripts/check_doc_links.py
 invoke_gate 'cargo fmt --check' cargo fmt --all -- --check
 invoke_gate 'cargo clippy -D warnings' cargo clippy --workspace --all-targets -- -D warnings
 invoke_gate 'cargo test' cargo test --workspace

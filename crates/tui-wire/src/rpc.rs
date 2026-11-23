@@ -159,10 +159,17 @@ pub enum RpcRequest {
         /// Id provider; tanpa argumen = provider bawaan.
         provider: Option<String>,
     },
-    /// Daftar subagent + statusnya (v2, read-only).
+    /// Daftar subagent (v2, read-only).
     SubagentList {
         /// Id permintaan.
         id: String,
+    },
+    /// Langganan event subagent (v2): `true` = push `subagent_event`.
+    SetSubagentSubscription {
+        /// Id permintaan.
+        id: String,
+        /// Apakah event push diaktifkan.
+        enabled: bool,
     },
     /// Kirim ulang frame yang tersimpan di spool saat kanal penuh (v2).
     ReplaySpool {
@@ -211,6 +218,41 @@ pub enum RpcRequest {
         id: Option<String>,
         /// Teks jawaban; kosong berarti dilewati.
         text: String,
+    },
+    /// Opt-in dialog `ask` kaya (omp `set_ask_dialog`): pertanyaan + opsi.
+    SetAskDialog {
+        /// Id permintaan.
+        id: String,
+        /// Apakah dialog kaya diaktifkan.
+        enabled: bool,
+    },
+    /// Jawab satu dialog `ask_dialog` berdasarkan id.
+    AskDialogAnswer {
+        /// Id dialog.
+        id: String,
+        /// Opsi terpilih (indeks 0-based) atau `None` untuk teks kustom.
+        selected: Option<u32>,
+        /// Teks kustom bila opsi kosong.
+        text: String,
+    },
+    /// Permintaan dialog UI generik (`select`, `confirm`, `input`, `editor`,
+    /// `form`, `cancel`) dari host extensions.
+    UiDialogRequest {
+        /// Id permintaan.
+        id: String,
+        /// Nama metode dialog.
+        method: String,
+        /// Parameter dialog (prompt/opsi/nilai awal).
+        params: serde_json::Value,
+    },
+    /// Jawaban host untuk dialog UI generik.
+    UiDialogAnswer {
+        /// Id permintaan.
+        id: String,
+        /// Nilai jawaban (string, indeks, atau objek form).
+        value: serde_json::Value,
+        /// Apakah pengguna membatalkan dialog.
+        cancelled: bool,
     },
     /// Negosiasi protokol v2 (chunking frame besar).
     NegotiateProtocol {
@@ -444,6 +486,46 @@ pub enum RpcFrame {
         /// Pertanyaan untuk pengguna.
         question: String,
     },
+    /// Dialog `ask` kaya (setelah `set_ask_dialog`): klien menjawab dengan
+    /// `ask_dialog_answer`.
+    AskDialog {
+        /// Id dialog.
+        id: String,
+        /// Pertanyaan.
+        question: String,
+        /// Opsi pilihan (boleh kosong = teks bebas).
+        options: Vec<String>,
+        /// Indeks opsi yang disarankan.
+        recommended: Option<u32>,
+        /// Batas waktu (detik; 0 = tanpa batas).
+        timeout_secs: u64,
+    },
+    /// Konfirmasi pengaturan dialog `ask`.
+    AskDialogConfigured {
+        /// Id permintaan.
+        id: String,
+        /// Apakah dialog kaya aktif.
+        enabled: bool,
+    },
+    /// Permintaan dialog UI generik untuk klien (host extensions).
+    UiDialogRequest {
+        /// Id permintaan.
+        id: String,
+        /// `select` | `confirm` | `input` | `editor` | `form` | `cancel`.
+        method: String,
+        /// Parameter dialog.
+        params: serde_json::Value,
+    },
+    /// Balasan dialog UI generik dari klien.
+    UiDialogAnswer {
+        /// Id permintaan.
+        id: String,
+        /// Nilai jawaban.
+        value: serde_json::Value,
+        /// Dibatalkan pengguna.
+        cancelled: bool,
+    },
+
     /// Pemakaian token kumulatif.
     Usage {
         /// Id permintaan.
@@ -539,6 +621,15 @@ pub enum RpcFrame {
     SubagentList {
         /// Satu entri per anak.
         agents: Vec<SubagentInfo>,
+    },
+    /// Event satu subagent (v2 push): dikirim selama langganan aktif.
+    SubagentEvent {
+        /// Id anak (`sub-1`, …).
+        agent: String,
+        /// Nama event ringkas (mis. `tool_start`, `agent_end`).
+        event: String,
+        /// Payload JSON ringkas.
+        payload: String,
     },
     /// Spool dimainkan ulang (v2, balasan `replay_spool`).
     SpoolReplayed {
@@ -954,6 +1045,56 @@ mod tests {
     }
 
     #[test]
+    fn ask_dialog_dan_subagent_event_roundtrip() {
+        let set: RpcRequest =
+            serde_json::from_str(r#"{"type":"set_ask_dialog","id":"c1","enabled":true}"#).unwrap();
+        assert_eq!(
+            set,
+            RpcRequest::SetAskDialog {
+                id: "c1".into(),
+                enabled: true
+            }
+        );
+        let jawab: RpcRequest = serde_json::from_str(
+            r#"{"type":"ask_dialog_answer","id":"a1","selected":1,"text":""}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            jawab,
+            RpcRequest::AskDialogAnswer {
+                selected: Some(1),
+                ..
+            }
+        ));
+        let frame = RpcFrame::AskDialog {
+            id: "a1".into(),
+            question: "pilih".into(),
+            options: vec!["satu".into(), "dua".into()],
+            recommended: Some(0),
+            timeout_secs: 600,
+        };
+        let json = serde_json::to_string(&frame).unwrap();
+        assert!(json.contains(r#""type":"ask_dialog""#), "{json}");
+        assert!(json.contains(r#""recommended":0"#), "{json}");
+        let sub: RpcRequest = serde_json::from_str(
+            r#"{"type":"set_subagent_subscription","id":"s1","enabled":true}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            sub,
+            RpcRequest::SetSubagentSubscription { enabled: true, .. }
+        ));
+        let ev = RpcFrame::SubagentEvent {
+            agent: "sub-1".into(),
+            event: "tool_start".into(),
+            payload: r#"{"tool":"bash"}"#.into(),
+        };
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(json.contains(r#""type":"subagent_event""#), "{json}");
+        assert!(json.contains(r#""agent":"sub-1""#), "{json}");
+    }
+
+    #[test]
     fn usage_request_dan_frame() {
         let request: RpcRequest = serde_json::from_str(r#"{"type":"usage","id":"7"}"#).unwrap();
         assert_eq!(request, RpcRequest::Usage { id: "7".into() });
@@ -1046,5 +1187,29 @@ mod tests {
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""type":"event""#), "{json}");
         assert!(json.contains(r#""event":"text_delta""#), "{json}");
+    }
+}
+
+#[cfg(test)]
+mod dialog_generic_tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn dialog_ui_generic_roundtrip() {
+        let req: RpcRequest = serde_json::from_str(
+            r#"{"type":"ui_dialog_request","id":"d1","method":"confirm","params":{"prompt":"lanjut?"}}"#,
+        )
+        .unwrap();
+        assert!(matches!(req, RpcRequest::UiDialogRequest { .. }));
+        let frame = RpcFrame::UiDialogAnswer {
+            id: "d1".to_string(),
+            value: serde_json::json!(true),
+            cancelled: false,
+        };
+        let json = serde_json::to_string(&frame).unwrap();
+        assert!(json.contains(r#""type":"ui_dialog_answer""#), "{json}");
+        assert!(json.contains(r#""cancelled":false"#), "{json}");
     }
 }

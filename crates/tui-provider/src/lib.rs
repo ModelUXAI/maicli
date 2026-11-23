@@ -20,6 +20,6 @@ pub mod models;
 pub mod sse;
 pub mod wire;
 
-pub use client::{ChatRequest, ModelInfo, OpenAiCompatClient, Provider, RetryPolicy};
+pub use client::{ChatRequest, ModelInfo, OpenAiCompatClient, Provider, RetryPolicy, request_body};
 pub use error::GatewayError;
 pub use models::{DiscoveryCache, match_model};

@@ -2,21 +2,40 @@
 
 mod acp_mode;
 mod approvals;
+mod artifacts;
 mod banner;
+mod checkpoint;
 mod cli;
+mod conflict;
+mod context_notes;
 mod event_log;
+mod features;
+mod find_tool;
+mod goal_loop;
+mod hooks;
+mod install_id;
 mod logging;
 mod mcp_boot;
 mod models_cache;
 mod parity_report;
+mod plan_mode;
+mod prewalk;
 mod relay_mode;
+mod research;
 mod rpc_mode;
 mod serve_mode;
 mod session_open;
 mod setup_wizard;
+mod staging;
+mod system_prompt;
+mod task_worktree;
 mod text_mode;
+mod thought;
+mod tool_issues;
 mod tui_mode;
 mod usage;
+mod wait_tool;
+mod watchdog;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -56,8 +75,8 @@ pub struct Boot {
     pub models: Vec<String>,
     /// Provider aktif (id registry) dan env var kuncinya.
     pub provider: (String, String),
-    /// Berkas rekam jejak event agen (JSONL) bila `--event-log` dipakai.
-    pub event_log: Option<std::path::PathBuf>,
+    /// Perekam event (bisa di-toggle `/record`).
+    pub recorder: Arc<crate::event_log::Recorder>,
     /// Tool dari server MCP yang berhasil terhubung (didahului boot MCP).
     pub mcp_tools: Vec<Arc<dyn tui_tools::Tool>>,
     /// Registry subagent untuk mode TUI (panel F3); `None` = fitur mati.
@@ -70,10 +89,28 @@ pub struct Boot {
     pub katalog: Option<tui_katalog::Katalog>,
     /// Catatan status MCP untuk ditampilkan ke pengguna.
     pub mcp_notes: Vec<String>,
+    /// Config efektif penuh (dipakai command fitur).
+    pub config: tui_config::Config,
+    /// Memori persisten proyek; `None` bila dimatikan/gagal dibuka.
+    pub memory: Option<Arc<tui_memory::MemoryHandle>>,
+    /// Berkas instruksi proyek yang diimpor ke system prompt.
+    pub context_files: Vec<tui_tools::context_files::ContextFile>,
+    /// Catatan konteks persisten (`/context-note`).
+    pub context_notes: Vec<context_notes::Note>,
+    /// Anotasi review (`/review`, `/annotate`).
+    pub annotations: Vec<context_notes::Note>,
+    /// Notifikasi aktif (`/notifications`).
+    pub notifications: Vec<context_notes::Note>,
+    /// Rencana kerja persisten (`/plan`).
+    pub plan: String,
+    /// Laporan isu tool terbuka.
+    pub tool_issues: Vec<tool_issues::Issue>,
+    /// Override system prompt pengguna.
+    pub system_prompt: String,
 }
 
 impl Boot {
-    /// Registry tool satu sesi: 8 tool v1 + skill + tool MCP yang terhubung.
+    /// Registry tool satu sesi: 17 tool v1 (+ DAP/LSP/ACP saat dikonfigurasi) + skill + tool MCP.
     pub fn tool_registry(&self) -> tui_tools::ToolRegistry {
         let mut registry = tui_tools::ToolRegistry::v1();
         if !self.skills.is_empty() {
@@ -84,6 +121,79 @@ impl Boot {
         for tool in &self.mcp_tools {
             registry.register(tool.clone());
         }
+        if let Some(memory) = &self.memory {
+            registry.register(Arc::new(tui_memory::MemoryTool::new(Arc::clone(memory))));
+        }
+        if !self.config.ssh.hosts.is_empty() {
+            let hosts = self
+                .config
+                .ssh
+                .hosts
+                .iter()
+                .map(|(name, host)| {
+                    (
+                        name.clone(),
+                        tui_tools::ssh::SshHost {
+                            target: host.target.clone(),
+                            port: host.port,
+                            identity: host.identity.clone(),
+                            timeout_secs: host.timeout_secs,
+                        },
+                    )
+                })
+                .collect();
+            registry.register(Arc::new(tui_tools::ssh::SshTool::new(hosts)));
+        }
+        // `wait` mengikuti manager subagent yang sama dengan panel TUI/RPC.
+        if let Some(manager) = &self.subagents {
+            registry.register(Arc::new(wait_tool::WaitTool::baru(Arc::clone(manager))));
+        }
+        // `find` memakai model judge dari provider sesi.
+        registry.register(Arc::new(find_tool::FindTool::baru(
+            Arc::new(self.client.clone()),
+            self.model.clone(),
+        )));
+        registry.register(Arc::new(tool_issues::ReportToolIssueTool::baru(
+            crate::config_root(),
+        )));
+        // Staging perubahan: preview → /accept.
+        registry.register(Arc::new(
+            staging::StageWriteTool::baru(crate::config_root()),
+        ));
+        // Media (TTS/gambar) hanya aktif bila penyedia eksternal dikonfigurasi.
+        if let Some(media) = tui_tools::media::MediaTool::dari_config(
+            self.config.media.tts_command.clone(),
+            self.config.media.image_command.clone(),
+        ) {
+            registry.register(Arc::new(media));
+        }
+        // DAP/LSP/ACP hanya aktif bila perintah eksternal dikonfigurasi.
+        if self.config.debug.enabled
+            && !self.config.debug.command.trim().is_empty()
+            && let Some(dap) = tui_tools::dap::DapTool::new(
+                &self.config.debug.command,
+                self.config.debug.args.clone(),
+                self.config.debug.timeout_secs,
+            )
+        {
+            registry.register(Arc::new(dap));
+        }
+        if self.config.lsp.enabled
+            && !self.config.lsp.command.trim().is_empty()
+            && let Some(lsp) = tui_tools::lsp::LspTool::new(
+                &self.config.lsp.command,
+                self.config.lsp.args.clone(),
+                self.config.lsp.timeout_secs,
+            )
+        {
+            registry.register(Arc::new(lsp));
+        }
+        if let Some(acp) =
+            tui_subagent::acp_client::AcpSubagentTool::from_config(&self.config.acp_client)
+        {
+            registry.register(Arc::new(acp));
+        }
+        registry.register(Arc::new(tui_computer::ComputerTool));
         registry
     }
 }
@@ -164,16 +274,21 @@ async fn fork_session(
     })
 }
 
+/// Folder extension global (`<config_root>/extensions`).
+pub(crate) fn extensions_dir() -> PathBuf {
+    config_root().join("extensions")
+}
+
 /// Direktori data aplikasi (config, sesi, log).
 ///
 /// `MAICLI_DATA_DIR` menimpa lokasi default agar instalasi portabel dan test E2E
 /// bisa memakai direktori terisolasi tanpa menyentuh profil pengguna. Variabel
 /// ini tidak pernah mengubah isi peka; ia hanya memindahkan lokasi berkas.
 pub(crate) fn config_root() -> PathBuf {
-    if let Some(custom) = std::env::var_os("MAICLI_DATA_DIR") {
-        if !custom.is_empty() {
-            return PathBuf::from(custom);
-        }
+    if let Some(custom) = std::env::var_os("MAICLI_DATA_DIR")
+        && !custom.is_empty()
+    {
+        return PathBuf::from(custom);
     }
     directories::BaseDirs::new()
         .map(|dirs| dirs.config_dir().join("ModeluXAI").join("TUI"))
@@ -419,16 +534,14 @@ async fn main() -> ExitCode {
         ),
         None => (None, Vec::new(), None, tui_wire::Usage::default()),
     };
-    let mcp_boot = mcp_boot::connect_all(&loaded.config.mcp).await;
+    let mcp_boot = mcp_boot::connect_all(&loaded.config.mcp, &root, &cwd).await;
     // Extensions: folder <config_root>/extensions (manifest ketat + env
     // dibersihkan + approval Exec); flag --no-extensions / config menonaktifkan.
     let mut extension_tools: Vec<Arc<dyn tui_tools::Tool>> = Vec::new();
     let mut extension_notes: Vec<String> = Vec::new();
     if loaded.config.extensions.enabled && !args.no_extensions {
-        extension_tools = tui_tools::extensions::muat_extensions(
-            &config_root().join("extensions"),
-            &mut extension_notes,
-        );
+        extension_tools =
+            tui_tools::extensions::muat_extensions(&extensions_dir(), &mut extension_notes);
         for note in &extension_notes {
             eprintln!("[extensions] {note}");
         }
@@ -491,6 +604,56 @@ async fn main() -> ExitCode {
             }
         };
     }
+    let memory = if loaded.config.memory.enabled {
+        let cfg_mem = &loaded.config.memory;
+        let jalur = PathBuf::from(&cfg_mem.path);
+        let dir = if jalur.is_absolute() {
+            jalur
+        } else {
+            cwd.join(jalur)
+        };
+        match tui_memory::MemoryHandle::open(
+            &dir,
+            &cfg_mem.backend,
+            cfg_mem.embedding == "hash",
+            cfg_mem.max_entries,
+            cfg_mem.inject_chars,
+            cfg_mem.inject_mental_models,
+        ) {
+            Ok(memory) => {
+                let memory = Arc::new(memory);
+                if cfg_mem.auto_refresh_models {
+                    crate::features::spawn_mental_model_refresh(
+                        Arc::clone(&memory),
+                        cfg_mem.auto_refresh_secs.max(30),
+                    );
+                }
+                Some(memory)
+            }
+            Err(err) => {
+                eprintln!("[memory] {}: {}", err.code, err.message);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let recorder_path = args.event_log.clone().unwrap_or_else(|| {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        root.join("recordings").join(format!("{stamp}.jsonl"))
+    });
+    let recorder = crate::event_log::Recorder::new(recorder_path, args.event_log.is_some());
+    // Instruksi proyek dibaca sebelum `cwd` dipindahkan ke Boot.
+    let context_files = tui_tools::context_files::muat(&cwd);
+    let context_notes = context_notes::muat();
+    let annotations = context_notes::annotation_muat();
+    let notifications = context_notes::notification_muat();
+    let plan = plan_mode::muat();
+    let tool_issues = tool_issues::muat();
+    let system_prompt = system_prompt::muat();
     let boot = Boot {
         client,
         // Precedensi model: --model eksplisit > model terakhir di sesi > config.
@@ -515,7 +678,7 @@ async fn main() -> ExitCode {
             loaded.config.gateway.provider.clone(),
             loaded.config.gateway.api_key_env.clone(),
         ),
-        event_log: args.event_log.clone(),
+        recorder,
         mcp_tools: {
             let mut semua = mcp_boot.tools;
             semua.extend(extension_tools);
@@ -530,6 +693,15 @@ async fn main() -> ExitCode {
             .then(|| Arc::new(tui_subagent::manager::SubagentManager::new())),
         notif_rx: mcp_boot.notif_rx,
         skills: skills_dimuat,
+        config: loaded.config.clone(),
+        memory,
+        context_files,
+        context_notes,
+        annotations,
+        notifications,
+        plan,
+        tool_issues,
+        system_prompt,
         // Katalog omp: flag --catalog menang atas config catalog.path.
         katalog: {
             let dir_katalog = args

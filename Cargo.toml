@@ -7,6 +7,8 @@ members = [
     "crates/tui-session",
     "crates/tui-approval",
     "crates/tui-config",
+    "crates/tui-memory",
+    "crates/tui-computer",
     "crates/tui-tools",
     "crates/tui-mcp",
     "crates/tui-subagent",
@@ -19,7 +21,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "MIT"
 authors = ["iqbal"]
 
@@ -30,6 +32,8 @@ tui-provider = { path = "crates/tui-provider" }
 tui-session = { path = "crates/tui-session" }
 tui-approval = { path = "crates/tui-approval" }
 tui-config = { path = "crates/tui-config" }
+tui-memory = { path = "crates/tui-memory" }
+tui-computer = { path = "crates/tui-computer" }
 tui-tools = { path = "crates/tui-tools" }
 tui-mcp = { path = "crates/tui-mcp" }
 tui-subagent = { path = "crates/tui-subagent" }
@@ -37,7 +41,7 @@ tui-katalog = { path = "crates/tui-katalog" }
 tui-core = { path = "crates/tui-core" }
 tui-sdk = { path = "crates/tui-sdk" }
 
-anyhow = "1.0"
+
 base64 = "0.22"
 bytes = "1"
 async-trait = "0.1"
@@ -70,6 +74,7 @@ tokio = { version = "1.44", features = [
     "process",
     "io-util",
     "io-std",
+    "net",
     "signal",
     "test-util",
 ] }
@@ -78,6 +83,15 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 walkdir = "2.5"
+rusqlite = { version = "0.41", features = ["bundled"] }
+sha2 = "0.10"
+enigo = "0.6"
+image = { version = "0.25", default-features = false, features = ["png"] }
+x11rb = { version = "0.13", features = ["randr"] }
+arboard = "3.7"
+lopdf = "0.47"
+flate2 = "1"
+qrcode = { version = "0.15", default-features = false, features = ["svg"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

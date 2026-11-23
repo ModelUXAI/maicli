@@ -325,10 +325,10 @@ impl Approver for PolicyApprover {
             return Decision::Deny;
         };
         let decision = ui.ask(&request).await;
-        if matches!(decision, Decision::Session | Decision::Always) {
-            if let Ok(mut grants) = self.grants.lock() {
-                grants.grant(decision, request.tier, &request.subject);
-            }
+        if matches!(decision, Decision::Session | Decision::Always)
+            && let Ok(mut grants) = self.grants.lock()
+        {
+            grants.grant(decision, request.tier, &request.subject);
         }
         decision
     }

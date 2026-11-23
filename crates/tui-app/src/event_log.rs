@@ -7,58 +7,95 @@
 //! Pencatatan bersifat best-effort: kegagalan menulis log tidak boleh
 //! menggagalkan sesi pengguna (dicatat di `tracing`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tui_core::agent::event_channel;
 use tui_wire::AgentEvent;
 
-/// Kanal event; bila `log_path` diisi, event juga direkam ke berkas JSONL.
-pub fn channel(
-    log_path: Option<PathBuf>,
+/// Pegangan perekam event yang bisa dinyalakan/dimatikan saat sesi berjalan.
+#[derive(Debug)]
+pub struct Recorder {
+    path: PathBuf,
+    enabled: AtomicBool,
+}
+
+impl Recorder {
+    /// Buat pegangan; `enabled` = rekam sejak awal (`--event-log`).
+    pub fn new(path: PathBuf, enabled: bool) -> Arc<Self> {
+        Arc::new(Self {
+            path,
+            enabled: AtomicBool::new(enabled),
+        })
+    }
+
+    /// Nyalakan/matikan perekaman.
+    pub fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::SeqCst);
+    }
+
+    /// Apakah perekaman aktif.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::SeqCst)
+    }
+
+    /// Berkas tujuan.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+/// Kanal event yang selalu meneruskan event dan merekamnya saat `Recorder` aktif.
+pub fn channel_with_recorder(
+    recorder: Arc<Recorder>,
 ) -> (
     tokio::sync::mpsc::UnboundedSender<AgentEvent>,
     tokio::sync::mpsc::UnboundedReceiver<AgentEvent>,
     Option<tokio::sync::oneshot::Receiver<()>>,
 ) {
-    let Some(log_path) = log_path else {
-        let (tx, rx) = event_channel();
-        return (tx, rx, None);
-    };
+    let log_path = recorder.path().to_path_buf();
     let (inner_tx, mut inner_rx) = event_channel();
     let (outer_tx, outer_rx) = event_channel();
     let (done_tx, done_rx) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
-        if let Some(parent) = log_path.parent() {
-            let _ = tokio::fs::create_dir_all(parent).await;
-        }
-        let mut file = match tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-            .await
-        {
-            Ok(file) => Some(tokio::io::BufWriter::new(file)),
-            Err(err) => {
-                tracing::warn!(target: "maicli::event_log", "log event tidak bisa dibuka: {err}");
-                None
-            }
-        };
+        let mut file: Option<tokio::io::BufWriter<tokio::fs::File>> = None;
         use tokio::io::AsyncWriteExt;
         while let Some(event) = inner_rx.recv().await {
-            if let Some(writer) = file.as_mut() {
-                match serde_json::to_string(&event) {
-                    Ok(line) => {
-                        let written = async {
-                            writer.write_all(line.as_bytes()).await?;
-                            writer.write_all(b"\n").await
+            if recorder.is_enabled() {
+                if file.is_none() {
+                    if let Some(parent) = log_path.parent() {
+                        let _ = tokio::fs::create_dir_all(parent).await;
+                    }
+                    match tokio::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&log_path)
+                        .await
+                    {
+                        Ok(handle) => {
+                            file = Some(tokio::io::BufWriter::new(handle));
                         }
-                        .await;
-                        if let Err(err) = written {
-                            tracing::warn!(target: "maicli::event_log", "gagal menulis log event: {err}");
+                        Err(err) => {
+                            tracing::warn!(target: "maicli::event_log", "log event tidak bisa dibuka: {err}");
                         }
                     }
-                    Err(err) => {
-                        tracing::warn!(target: "maicli::event_log", "event tidak bisa diserialisasi: {err}");
+                }
+                if let Some(writer) = file.as_mut() {
+                    match serde_json::to_string(&event) {
+                        Ok(line) => {
+                            let written = async {
+                                writer.write_all(line.as_bytes()).await?;
+                                writer.write_all(b"\n").await
+                            }
+                            .await;
+                            if let Err(err) = written {
+                                tracing::warn!(target: "maicli::event_log", "gagal menulis log event: {err}");
+                            }
+                        }
+                        Err(err) => {
+                            tracing::warn!(target: "maicli::event_log", "event tidak bisa diserialisasi: {err}");
+                        }
                     }
                 }
             }
@@ -72,6 +109,22 @@ pub fn channel(
         let _ = done_tx.send(());
     });
     (inner_tx, outer_rx, Some(done_rx))
+}
+
+/// Kanal event; bila `log_path` diisi, event juga direkam ke berkas JSONL.
+#[cfg(test)]
+pub fn channel(
+    log_path: Option<PathBuf>,
+) -> (
+    tokio::sync::mpsc::UnboundedSender<AgentEvent>,
+    tokio::sync::mpsc::UnboundedReceiver<AgentEvent>,
+    Option<tokio::sync::oneshot::Receiver<()>>,
+) {
+    let Some(log_path) = log_path else {
+        let (tx, rx) = event_channel();
+        return (tx, rx, None);
+    };
+    channel_with_recorder(Recorder::new(log_path, true))
 }
 
 /// Tunggu penulis log menyelesaikan flush terakhir (maks 2 detik).

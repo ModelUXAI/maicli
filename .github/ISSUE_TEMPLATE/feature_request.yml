@@ -1,0 +1,39 @@
+name: Feature request
+description: Usulkan fitur atau peningkatan
+title: "[feat] "
+labels: ["feat"]
+body:
+  - type: textarea
+    id: masalah
+    attributes:
+      label: Masalah yang ingin diselesaikan
+      description: Apa yang sulit dilakukan sekarang?
+    validations:
+      required: true
+  - type: textarea
+    id: usulan
+    attributes:
+      label: Usulan solusi
+      description: Perilaku/command/tool yang diharapkan.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatif
+    attributes:
+      label: Alternatif yang sudah dipertimbangkan
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - TUI / UX
+        - Tool / agent loop
+        - Provider / gateway
+        - MCP / extension
+        - Sesi / memori
+        - Platform
+        - Lainnya
+    validations:
+      required: true

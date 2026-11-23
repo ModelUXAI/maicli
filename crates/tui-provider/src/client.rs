@@ -60,6 +60,8 @@ pub struct ChatRequest {
     pub max_tokens: Option<u32>,
     /// Tingkat penalaran (`low`/`medium`/`high`); dikirim bila Some.
     pub reasoning_effort: Option<String>,
+    /// Tier layanan gateway (`priority` untuk `/fast`); dikirim bila Some.
+    pub service_tier: Option<String>,
 }
 
 impl ChatRequest {
@@ -71,6 +73,7 @@ impl ChatRequest {
             tools: Vec::new(),
             max_tokens: None,
             reasoning_effort: None,
+            service_tier: None,
         }
     }
 }
@@ -185,23 +188,31 @@ impl OpenAiCompatClient {
     }
 
     fn build_body(&self, request: &ChatRequest) -> Value {
-        let mut body = json!({
-            "model": request.model,
-            "messages": to_wire_messages(&request.messages),
-            "stream": true,
-            "stream_options": { "include_usage": true }
-        });
-        if !request.tools.is_empty() {
-            body["tools"] = Value::Array(to_wire_tools(&request.tools));
-        }
-        if let Some(max_tokens) = request.max_tokens {
-            body["max_tokens"] = json!(max_tokens);
-        }
-        if let Some(effort) = &request.reasoning_effort {
-            body["reasoning_effort"] = json!(effort);
-        }
-        body
+        request_body(request)
     }
+}
+
+/// Body JSON satu permintaan chat (dipakai klien dan `/trace`).
+pub fn request_body(request: &ChatRequest) -> Value {
+    let mut body = json!({
+        "model": request.model,
+        "messages": to_wire_messages(&request.messages),
+        "stream": true,
+        "stream_options": { "include_usage": true }
+    });
+    if !request.tools.is_empty() {
+        body["tools"] = Value::Array(to_wire_tools(&request.tools));
+    }
+    if let Some(max_tokens) = request.max_tokens {
+        body["max_tokens"] = json!(max_tokens);
+    }
+    if let Some(effort) = &request.reasoning_effort {
+        body["reasoning_effort"] = json!(effort);
+    }
+    if let Some(tier) = &request.service_tier {
+        body["service_tier"] = json!(tier);
+    }
+    body
 }
 
 fn is_transient(err: &reqwest::Error) -> bool {
@@ -476,6 +487,17 @@ mod tests {
         let message = final_message.unwrap();
         assert_eq!(message.stop_reason, StopReason::ToolUse);
         assert_eq!(message.tool_calls()[0].2, "{\"path\":\"x\"}");
+    }
+
+    #[test]
+    fn service_tier_dan_effort_masuk_body() {
+        let client = client("http://127.0.0.1:9");
+        let mut request = ChatRequest::new("m", vec![Message::user("halo")]);
+        request.reasoning_effort = Some("high".to_string());
+        request.service_tier = Some("priority".to_string());
+        let body = client.build_body(&request);
+        assert_eq!(body["reasoning_effort"], "high");
+        assert_eq!(body["service_tier"], "priority");
     }
 
     #[test]

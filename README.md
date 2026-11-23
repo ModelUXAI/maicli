@@ -17,10 +17,10 @@ berkas dan eksekusi melewati approval gate yang bisa kamu atur.
 
 ## Fitur
 
-- Lima mode: `tui` (terminal penuh), `text` (REPL untuk SSH/pipe), `rpc`
-  (otomasi, protokol v1+v2), `serve` (API HTTP lokal + SSE), `relay`
-  (collab WebSocket), dan `acp` (Agent Client Protocol, dipakai Zed dan host
-  lain)
+- Enam mode: `tui` (terminal penuh), `text` (REPL untuk SSH/pipe), `rpc`
+  (otomasi, protokol v1+v2), `serve` (API HTTP lokal + SSE + broker OAuth),
+  `relay` (collab WebSocket + klien web/link/QR), dan `acp` (Agent Client
+  Protocol, server + klien agen eksternal)
 - Agent Hub (`Alt+A`): kelola subagent dari panel; lihat event dan
   transkrip, kirim steer/prompt, abort/kill, atau broadcast ke semua anak
 - Orchestrator: satu perintah mem-spawn hingga 8 subagent (paralel atau
@@ -30,8 +30,11 @@ berkas dan eksekusi melewati approval gate yang bisa kamu atur.
   tool; notifikasi long-lived dengan reconnect otomatis
 - Katalog provider (opsional): muat katalog omp (98 provider) dan pilih lewat
   UI `/catalog`
-- Extension: folder `extensions/<nama>/extension.json` jadi tool proses
-  ter-sandbox; env dibersihkan dan approval wajib
+- Extension/plugin: folder `extensions/<nama>/extension.json` jadi tool proses
+  ter-sandbox; env dibersihkan dan approval wajib; `/plugins list|reload`
+- Tool tambahan: `lsp`, `debug` (DAP), `ast_grep`/`ast_edit`, `hashline_edit`,
+  `fetch`, `web_search`, `github`/`pr://`, `find`, `security_scan`, `eval`
+  (Python/Bun), `browser` (CDP), `media` (TTS/gambar), `wait`, `stage_write`
 - Keamanan: kunci API hanya lewat env var atau keyring OS (Windows Credential
   Manager, Linux Secret Service, macOS Keychain); file sensitif mode-600/ACL;
   proses anak tidak mewarisi kredensial; kill pohon proses di semua platform
@@ -40,17 +43,24 @@ berkas dan eksekusi melewati approval gate yang bisa kamu atur.
 
 ## Instalasi
 
-A. Unduh dari [Releases](../../releases):
+A. Unduh dari halaman Releases repositori GitHub ini:
 
 ```bash
-# Linux x64
-tar -xzf maicli-v0.1.0-linux-x64.tar.gz && sudo mv maicli /usr/local/bin/
+# Linux x64 (pola: maicli-<platform>-vX.Y.Z.tar.gz)
+# verifikasi checksum dulu
+sha256sum -c maicli-linux-x64-v0.1.0.tar.gz.sha256
+tar -xzf maicli-linux-x64-v0.1.0.tar.gz
+sudo mv maicli-linux-x64/maicli /usr/local/bin/
 ```
+
+Tersedia: Linux x64/arm64, macOS arm64/x64, Windows x64/arm64 — setiap arsip berisi
+`maicli`, `LICENSE`, `README.md`, `CHANGELOG.md`, dan file `.sha256`.
 
 B. Atau build dari sumber (butuh Rust stable):
 
 ```bash
-cargo install --path crates/tui-app
+cargo install --path crates/tui-app --locked
+# atau: cargo build --release -p tui-app --locked
 ```
 
 ## Mulai cepat
@@ -68,10 +78,14 @@ maicli --mode acp       # kendalikan dari host eksternal (Zed dsb.)
 ```
 
 Perintah di dalam TUI: `/model`, `/provider add`, `/catalog`, `/compact`,
-`/tree`, `/usage`. Tekan `F1` untuk daftar lengkap. Kelola subagent dengan
-`Alt+A`.
+`/tree`, `/usage`, `/plan`, `/goal`, `/research`, `/watchdog`, `/staging`,
+`/accept`, `/artifact`, `/context-note`, `/skill-new`, `/hooks` (via config).
+Tekan `F1` untuk daftar lengkap. Kelola subagent dengan `Alt+A`.
 
-## Arsitektur (13 crate)
+SDK: RPC Go/Python/TypeScript di `sdk/` (lihat `docs/sdk-lintas-bahasa.md`);
+crate Rust `tui-sdk` untuk embed in-process (lihat `docs/sdk-rust-v1.md`).
+
+## Arsitektur (15 crate)
 
 ```
 tui-wire      tipe protokol & klien gateway (OpenAI-compatible)
@@ -84,6 +98,8 @@ tui-tools     tool inti + skills + extensions + katalog runner
 tui-mcp       klien MCP (stdio/HTTP/SSE)
 tui-subagent  manager + orchestrator (A–D)
 tui-katalog   kompilator katalog KDL omp
+tui-memory    memori persisten (jsonl/markdown/sqlite + embedding lokal)
+tui-computer  kontrol desktop (screenshot/input)
 tui-core      sesi agent (turn, tools, hooks)
 tui-sdk       embedding Rust (SessionBuilder, AgentRegistry)
 tui-app       biner `maicli` (TUI/text/rpc/serve/relay/acp)
@@ -91,8 +107,15 @@ tui-app       biner `maicli` (TUI/text/rpc/serve/relay/acp)
 
 ## Kontribusi
 
-Lihat [CONTRIBUTING.md](CONTRIBUTING.md). PR melewati gerbang yang sama
-(fmt, clippy ketat, test, dependensi) di Linux dan Windows.
+Lihat [CONTRIBUTING.md](CONTRIBUTING.md). PR wajib melewati required checks
+(fmt, clippy Linux/Windows, test Linux/Windows, build release, deny, MSRV 1.89,
+judul Conventional, dependency review) sebelum bisa di-merge.
+
+## Rilis
+
+Versioning otomatis dari Conventional Commits lewat **release-plz**: PR rilis →
+tag `vX.Y.Z` → 6 biner + SHA256 di GitHub Release. Runbook lengkap dan aturan
+branch protection: [docs/setup-github.md](docs/setup-github.md).
 
 ## Keamanan
 

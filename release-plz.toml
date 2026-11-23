@@ -1,0 +1,116 @@
+# release-plz — PR rilis otomatis dari Conventional Commits.
+#
+# Alur: PR biasa di-merge ke `main` → workflow `release-plz.yml` membuka/
+# memperbarui PR rilis (versi + CHANGELOG) → maintainer me-merge PR rilis →
+# release-plz membuat tag `vX.Y.Z` + GitHub Release → workflow `release.yml`
+# membangun 6 biner + checksum dan melampirkannya ke Release.
+#
+# Semua crate memakai satu `version_group` (satu versi workspace), tetapi hanya
+# `tui-app` yang diberi tag/release. Commit crate internal masuk changelog
+# aplikasi lewat `changelog_include`.
+
+[workspace]
+allow_dirty = false
+publish = false
+# Rilis hanya setelah PR rilis di-merge, bukan setiap commit di main.
+release_always = false
+# Aplikasi 0.x: `feat` menaikkan MINOR (bukan PATCH seperti default Cargo 0.x).
+features_always_increment_minor = true
+# Tidak memakai crates.io: status "sudah dirilis" ditentukan dari tag git.
+git_only = true
+repo_url = "https://github.com/ModelUXAI/maicli"
+changelog_update = false
+changelog_path = "./CHANGELOG.md"
+git_release_enable = false
+git_tag_enable = false
+semver_check = false
+pr_labels = ["release"]
+# Judul PR rilis harus lolos check `pr-title` (Conventional Commits).
+pr_name = "chore: release"
+
+[[package]]
+name = "tui-wire"
+version_group = "workspace"
+
+[[package]]
+name = "tui-context"
+version_group = "workspace"
+
+[[package]]
+name = "tui-provider"
+version_group = "workspace"
+
+[[package]]
+name = "tui-session"
+version_group = "workspace"
+
+[[package]]
+name = "tui-approval"
+version_group = "workspace"
+
+[[package]]
+name = "tui-config"
+version_group = "workspace"
+
+[[package]]
+name = "tui-memory"
+version_group = "workspace"
+
+[[package]]
+name = "tui-computer"
+version_group = "workspace"
+
+[[package]]
+name = "tui-tools"
+version_group = "workspace"
+
+[[package]]
+name = "tui-mcp"
+version_group = "workspace"
+
+[[package]]
+name = "tui-subagent"
+version_group = "workspace"
+
+[[package]]
+name = "tui-katalog"
+version_group = "workspace"
+
+[[package]]
+name = "tui-core"
+version_group = "workspace"
+
+[[package]]
+name = "tui-sdk"
+version_group = "workspace"
+
+[[package]]
+name = "tui-app"
+version_group = "workspace"
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+git_tag_name = "v{{ version }}"
+git_release_name = "v{{ version }}"
+git_tag_enable = true
+git_release_enable = true
+
+# Commit dari crate internal ikut masuk changelog aplikasi.
+changelog_include = [
+  "tui-wire",
+  "tui-context",
+  "tui-provider",
+  "tui-session",
+  "tui-approval",
+  "tui-config",
+  "tui-memory",
+  "tui-computer",
+  "tui-tools",
+  "tui-mcp",
+  "tui-subagent",
+  "tui-katalog",
+  "tui-core",
+  "tui-sdk",
+]
+
+[changelog]
+protect_breaking_commits = true

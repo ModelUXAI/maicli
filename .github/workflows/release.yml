@@ -1,103 +1,218 @@
-name: Release
+name: Release binaries
 
-# Versioning: semver di [workspace.package] version (satu sumber); rilis = tag
-# `vX.Y.Z` (annoted) → build release 3 platform → arsip → GitHub Release dengan
-# catatan dari CHANGELOG (Keep-a-Changelog).
+# Dipicu oleh:
+#   1. tag `v*` (push manual / PAT),
+#   2. `workflow_call` dari release-plz setelah tag dibuat (GITHUB_TOKEN tidak
+#      memicu event `push` tag, jadi rilis otomatis memanggil workflow ini),
+#   3. `workflow_dispatch` untuk rilis ulang manual.
+#
+# Artefak: Linux x64, macOS arm64, macOS x64, Windows x64 + SHA256.
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag rilis (vX.Y.Z)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag rilis (vX.Y.Z)"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  CARGO_TERM_COLOR: always
+
 jobs:
   build:
-    name: build (${{ matrix.target }})
+    name: build (${{ matrix.arsip }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            arsip: maicli-${{ github.ref_name }}-linux-x64.tar.gz
+            os: ubuntu-22.04
+            arsip: maicli-linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            arsip: maicli-linux-arm64
           - target: aarch64-apple-darwin
-            os: macos-latest
-            arsip: maicli-${{ github.ref_name }}-macos-arm64.tar.gz
+            os: macos-14
+            arsip: maicli-macos-arm64
+          - target: x86_64-apple-darwin
+            os: macos-14
+            arsip: maicli-macos-x64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            arsip: maicli-${{ github.ref_name }}-windows-x64.zip
+            arsip: maicli-windows-x64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            arsip: maicli-windows-arm64
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
-      - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: release-${{ matrix.target }}-
+          shared-key: release-${{ matrix.target }}
 
-      - name: test (gerbang sebelum rilis — tidak ada rilis dari kode merah)
-        run: cargo test --workspace
+      - name: test (tidak ada rilis dari kode merah)
+        env:
+          RUST_TEST_THREADS: "1"
+        run: cargo test --workspace --locked
+
+      - name: deps lintas (linux arm64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          mkdir -p .cargo
+          cat >> .cargo/config.toml <<'CFG'
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          CFG
 
       - name: build release
-        run: cargo build --release -p tui-app
+        run: cargo build --release --locked -p tui-app --target ${{ matrix.target }}
+
+      - name: codesign (macOS, opsional)
+        if: runner.os == 'macOS' && env.APPLE_CERT_P12 != ''
         env:
-          # deny checks berjalan di CI (ci.yml); rilis memakai Lockfile yang sama.
-          CARGO_TERM_COLOR: always
-
-      - name: strip (unix)
-        if: runner.os != 'Windows'
-        run: strip target/release/maicli
-
-      - name: arsip (tar)
-        if: runner.os != 'Windows'
-        run: tar -czf "${{ matrix.arsip }}" -C target/release maicli
-
-      - name: arsip (zip)
-        if: runner.os == 'Windows'
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+        shell: bash
         run: |
-          Compress-Archive -Path target/release/maicli.exe -DestinationPath "${{ matrix.arsip }}"
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/maicli-sign.keychain-db"
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$APPLE_CERT_PASSWORD" "$KEYCHAIN"
+          security unlock-keychain -p "$APPLE_CERT_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$APPLE_CERT_PASSWORD" "$KEYCHAIN" >/dev/null
+          codesign --force --options runtime --timestamp --sign "$APPLE_SIGN_IDENTITY" \
+            "target/${{ matrix.target }}/release/maicli"
+          codesign --verify --strict --verbose=2 "target/${{ matrix.target }}/release/maicli"
 
-      - name: unggah artefak
-        uses: actions/upload-artifact@v4
+      - name: notarize (macOS, opsional)
+        if: runner.os == 'macOS' && env.APPLE_CERT_P12 != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="target/${{ matrix.target }}/release/maicli"
+          ZIP="$RUNNER_TEMP/maicli-notarize.zip"
+          ditto -c -k --keepParent "$BIN" "$ZIP"
+          xcrun notarytool submit "$ZIP" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$BIN"
+
+      - name: paket (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIR="dist/${{ matrix.arsip }}"
+          mkdir -p "$DIR"
+          cp "target/${{ matrix.target }}/release/maicli" "$DIR/"
+          cp LICENSE README.md CHANGELOG.md "$DIR/"
+          if [ "${{ runner.os }}" != "macOS" ]; then strip "$DIR/maicli"; fi
+          tar -czf "dist/${{ matrix.arsip }}-${TAG}.tar.gz" -C dist "${{ matrix.arsip }}"
+          rm -rf "$DIR"
+          (cd dist && sha256sum "${{ matrix.arsip }}-${TAG}.tar.gz" > "${{ matrix.arsip }}-${TAG}.tar.gz.sha256")
+
+      - name: paket (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "dist/${{ matrix.arsip }}"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/maicli.exe" $dir
+          Copy-Item LICENSE, README.md, CHANGELOG.md $dir
+          $zip = "dist/${{ matrix.arsip }}-$env:TAG.zip"
+          Compress-Archive -Path "$dir/*" -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.arsip }}-$env:TAG.zip" |
+            Out-File -Encoding ascii "dist/${{ matrix.arsip }}-$env:TAG.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.arsip }}
-          path: ${{ matrix.arsip }}
+          path: dist/*
+          if-no-files-found: error
 
   release:
+    name: release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
-      - name: ambil catatan changelog untuk versi ini
-        id: catatan
+      - name: verifikasi tag = versi Cargo.toml
+        shell: bash
         run: |
-          VER="${GITHUB_REF_NAME#v}"
-          # Ekstrak bagian Keep-a-Changelog di bawah "## [VER]" hingga judul berikut.
-          TEKS=$(awk -v ver="## [$VER]" 'index($0, ver)==1 {flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md)
-          if [ -z "$TEKS" ]; then TEKS="Rilis $GITHUB_REF_NAME"; fi
+          set -euo pipefail
+          VER="${TAG#v}"
+          CARGO_VER=$(awk '/^\[workspace.package\]/{f=1;next} f&&/^version/{gsub(/"/,"",$3);print $3;exit}' Cargo.toml)
+          if [ "$VER" != "$CARGO_VER" ]; then
+            echo "tag $TAG tidak cocok dengan [workspace.package] version $CARGO_VER" >&2
+            exit 1
+          fi
+
+      - name: catatan changelog
+        id: catatan
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          TEKS=$(awk -v ver="## [$VER]" 'index($0,ver)==1{flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md)
+          if [ -z "$TEKS" ]; then TEKS="Rilis $TAG"; fi
           { echo "teks<<EOF"; echo "$TEKS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
-      - name: unduh artefak
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: dist/
+          path: dist
+          merge-multiple: true
 
-      - name: buat GitHub Release
+      - name: buat/perbarui GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
           body: ${{ steps.catatan.outputs.teks }}
-          files: dist/**/*
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+          prerelease: ${{ contains(env.TAG, '-') }}

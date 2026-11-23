@@ -117,8 +117,161 @@ Perilaku:
 - `maicli config show` menampilkan `mcp.timeout_secs` dan daftar nama server (tanpa
   nilai env).
 
-## Perintah terkait
+### `[memory]`
 
+Memori persisten lintas sesi; backend dipilih pengguna. Tool `memory` (tier
+Write) dan command `/memory`/`/mm` memakai bagian ini. Injeksi ke system prompt
+dibatasi `inject_chars` dan hanya bila `enabled`.
+
+```toml
+[memory]
+enabled = true
+backend = "jsonl"        # jsonl | markdown | sqlite
+path = "memory"          # relatif terhadap cwd proyek
+embedding = "hash"       # hash (lokal, tanpa model) | none
+max_entries = 500
+inject_chars = 2000
+inject_mental_models = true
+auto_refresh_models = false   # refresh semua mental model berkala
+auto_refresh_secs = 300       # minimal 30 saat auto_refresh aktif
+```
+
+| Kunci | Tipe | Default | Arti |
+|---|---|---|---|
+| `enabled` | boolean | `true` | aktifkan injeksi + command memori |
+| `backend` | string | `jsonl` | `jsonl` (`notes.jsonl`), `markdown` (`MEMORY.md`), `sqlite` (`memory.db`) |
+| `path` | string | `memory` | folder memori; path relatif dihitung dari cwd |
+| `embedding` | string | `hash` | embedding lokal hash n-gram 384-d (deterministik, tanpa jaringan) atau `none` (keyword) |
+| `max_entries` | integer | 500 | entry tertua dipangkas saat melebihi |
+| `inject_chars` | integer | 2000 | batas karakter blok memori di system prompt |
+| `inject_mental_models` | boolean | `true` | sertakan ringkasan mental model |
+
+### `[marketplace]`
+
+```toml
+[marketplace]
+enabled = true
+index_url = "https://contoh/index.json"   # untuk /marketplace search
+allow_insecure = false                    # izinkan http/file/direktori lokal
+```
+
+Extension dipasang ke `<config_root>/extensions/<nama>` lewat `git clone
+--depth 1`, divalidasi dengan manifest ketat yang sama dengan loader, lalu
+dipakai setelah `/plugins reload` atau restart. `allow_insecure` hanya untuk
+pengembangan (repo lokal).
+
+### `[ssh]`
+
+Host bernama untuk tool `ssh` (tier Exec). `target` wajib `user@host` (tanpa
+spasi), tanpa password interaktif (`BatchMode=yes`).
+
+```toml
+[ssh.hosts.prod]
+target = "deploy@192.0.2.10"
+port = 22
+identity = ""        # kosong = ssh-agent/default
+timeout_secs = 60
+```
+
+### `[advisor]`, `[presets.*]`, `[collab]`, `[acp_client]`
+
+```toml
+[advisor]
+enabled = false
+provider = ""        # kosong = provider sesi (gateway kedua bila diisi)
+model = ""           # kosong = model sesi
+api_key_env = ""     # kosong = env provider sesi
+
+[presets.kerja]
+provider = "modeluxai"
+model = "deepseek-v4.1-flash"
+effort = "  "        # kosong = default
+
+[ui.keybindings]
+palette = "ctrl+p"   # default ctrl+k
+help = "f1"
+cancel = "ctrl+c"
+clear_input = "ctrl+u"
+tool_details = "ctrl+e"
+hub = "alt+a"
+
+[collab]
+port = 7475          # relay WS in-TUI (/collab, /live)
+remote_url = ""      # wss://… relay remote; dipakai /collab join <room> <kunci>
+
+[acp_client]
+enabled = false      # daftarkan tool `acp_subagent`
+command = ""         # perintah agen ACP eksternal (kosong = tidak aktif)
+args = ["--stdio"]
+timeout_secs = 120
+```
+
+### `[media]`
+
+Penyedia TTS/generasi gambar eksternal. Prompt dikirim di stdin, path berkas
+keluaran menjadi argumen terakhir; env kredensial dibuang, timeout 30 dtk.
+
+```toml
+[media]
+tts_command = ["python3", "tts.py"]
+image_command = ["python3", "image.py"]
+```
+
+### `[hooks]`
+
+Hook eksternal dijalankan lewat `/hook-test <event>`. Konteks JSON dikirim ke
+stdin; timeout 5 dtk; output dipotong 2 KiB. Perintah berasal dari config
+pengguna, bukan dari model.
+
+```toml
+[hooks]
+before_model = ["python3 /path/ke/hook.py"]
+after_tool = []
+before_tool = []
+on_stop = []
+[hooks.magic_keywords]
+urgent = "Jawab ringkas dan prioritaskan langkah aman."
+# [hooks]
+# ttsr_rules = ["rm -rf", "DROP TABLE"]
+```
+
+### `[oauth.broker.<nama>]` (mode `serve`)
+
+Broker OAuth 2.1 authorization-code + PKCE untuk API server lokal. Token hanya
+disimpan di memori proses `serve`, tidak ditulis ke disk. Endpoint:
+`GET /api/oauth/start?provider=<nama>`, `GET /api/oauth/callback?code=…&state=…`,
+`GET /api/oauth/status?provider=<nama>`. Semua endpoint tetap memakai token serve.
+
+```toml
+[oauth.broker.github]
+client_id = "..."
+client_secret_env = "GITHUB_CLIENT_SECRET"  # kosong = client publik
+authorize_url = "https://github.com/login/oauth/authorize"
+token_url = "https://github.com/login/oauth/access_token"
+redirect_uri = "http://127.0.0.1:7475/api/oauth/callback"
+scopes = ["repo", "read:user"]
+```
+
+### `[mcp.servers.<nama>.oauth]`
+
+OAuth 2.1 authorization-code + PKCE untuk server MCP berbasis `url`. Token
+disimpan di `<config_root>/mcp-oauth/<nama>.json` (0600) dan di-refresh otomatis;
+tanpa token server dilewati sampai `/mcp reauth <nama>` berhasil.
+
+```toml
+[mcp.servers.jira]
+url = "https://jira.contoh/mcp"
+transport = "http"
+
+[mcp.servers.jira.oauth]
+client_id = "maicli"
+authorization_url = ""   # kosong = discovery /.well-known/oauth-authorization-server
+token_url = ""
+scopes = ["mcp"]
+redirect_port = 0        # 0 = port loopback acak
+```
+
+## Perintah terkait
 - `maicli config show` — config **efektif** + asal tiap nilai (`[default]`,
   `[file global]`, `[file proyek]`), menyebut **sumber** kunci API
   (`env`/`keyring`/`tidak ada`) tanpa pernah menampilkan nilainya.

@@ -39,6 +39,32 @@ pub struct Config {
     pub catalog: CatalogConfig,
     /// Extension eksternal (loader folder).
     pub extensions: ExtensionsConfig,
+    /// Memori persisten (pilihan backend + embedding lokal).
+    pub memory: MemoryConfig,
+    /// Marketplace/plugin (unduh dari URL git).
+    pub marketplace: MarketplaceConfig,
+    /// Host SSH untuk tool exec remote.
+    pub ssh: SshConfig,
+    /// Model penasihat kedua (review setelah turn).
+    pub advisor: AdvisorConfig,
+    /// Preset model/provider/effort.
+    pub presets: BTreeMap<String, ModelPreset>,
+    /// Pengaturan relay collab in-TUI.
+    pub collab: CollabConfig,
+    /// Klien ACP: agen eksternal sebagai subagent.
+    pub acp_client: AcpClientConfig,
+    /// Server LSP untuk tool `lsp`.
+    pub lsp: LspConfig,
+    /// Adapter DAP untuk tool `debug`.
+    pub debug: DebugConfig,
+    /// Broker OAuth untuk tool/server yang butuh token pengguna.
+    pub oauth_broker: std::collections::BTreeMap<String, OAuthBrokerEntry>,
+    /// Hook eksternal yang dijalankan lewat `/hook-test`.
+    pub hooks: HooksConfig,
+    /// Penyedia media eksternal (TTS/gambar).
+    pub media: MediaConfig,
+    /// Kata kunci pemicu instruksi tambahan (magic keywords).
+    pub magic_keywords: std::collections::BTreeMap<String, String>,
     /// Provider tambahan yang ditambahkan pengguna (via `/provider add`).
     pub providers_eksternal: HashMap<String, ProviderEksternal>,
 }
@@ -69,6 +95,291 @@ impl Default for ExtensionsConfig {
     }
 }
 
+/// Bagian `[memory]`: memori persisten lintas sesi.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MemoryConfig {
+    /// Aktifkan injeksi memori ke system prompt dan command `/memory`.
+    pub enabled: bool,
+    /// Backend penyimpanan: `jsonl` (notes.jsonl), `markdown` (MEMORY.md),
+    /// atau `sqlite` (memory.db).
+    pub backend: String,
+    /// Folder memori relatif terhadap cwd proyek.
+    pub path: String,
+    /// Embedding lokal: `hash` (deterministik, tanpa model) atau `none`.
+    pub embedding: String,
+    /// Jumlah entry maksimum yang disimpan (yang tertua dipangkas).
+    pub max_entries: usize,
+    /// Batas karakter blok memori yang diinjeksi ke system prompt.
+    pub inject_chars: usize,
+    /// Injeksi ringkasan mental model aktif.
+    pub inject_mental_models: bool,
+    /// Refresh otomatis semua mental model dari memori secara berkala.
+    pub auto_refresh_models: bool,
+    /// Interval refresh otomatis (detik); minimal 30 saat aktif.
+    pub auto_refresh_secs: u64,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            backend: "jsonl".to_string(),
+            path: "memory".to_string(),
+            embedding: "hash".to_string(),
+            max_entries: 500,
+            inject_chars: 2_000,
+            inject_mental_models: true,
+            auto_refresh_models: false,
+            auto_refresh_secs: 300,
+        }
+    }
+}
+
+impl MemoryConfig {
+    /// Validasi nama backend/embedding sebelum dipakai.
+    pub fn validate(&self) -> Result<(), String> {
+        match self.backend.as_str() {
+            "jsonl" | "markdown" | "sqlite" => {}
+            lain => {
+                return Err(format!(
+                    "memory.backend '{lain}' tidak dikenal (jsonl|markdown|sqlite)"
+                ));
+            }
+        }
+        match self.embedding.as_str() {
+            "hash" | "none" => {}
+            lain => {
+                return Err(format!(
+                    "memory.embedding '{lain}' tidak dikenal (hash|none)"
+                ));
+            }
+        }
+        if self.max_entries == 0 {
+            return Err("memory.max_entries harus > 0".to_string());
+        }
+        if self.auto_refresh_models && self.auto_refresh_secs < 30 {
+            return Err(
+                "memory.auto_refresh_secs minimal 30 saat auto_refresh_models aktif".to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+/// Bagian `[marketplace]`: sumber dan kebijakan unduhan extension.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MarketplaceConfig {
+    /// Aktifkan command marketplace.
+    pub enabled: bool,
+    /// URL indeks katalog (JSON) untuk `search`/`list`.
+    pub index_url: String,
+    /// Izinkan URL non-HTTPS (mis. repo git lokal untuk pengembangan).
+    pub allow_insecure: bool,
+}
+
+impl Default for MarketplaceConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            index_url: String::new(),
+            allow_insecure: false,
+        }
+    }
+}
+
+/// Bagian `[ssh]`: host yang boleh dieksekusi tool `ssh`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SshConfig {
+    /// Host SSH; kunci map = nama logis.
+    pub hosts: BTreeMap<String, SshHostConfig>,
+}
+
+/// Satu host SSH.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SshHostConfig {
+    /// Target `user@host` (tanpa port) atau `host`.
+    pub target: String,
+    /// Port SSH.
+    pub port: u16,
+    /// Path kunci privat (opsional; kosong = pakai ssh-agent/identity default).
+    pub identity: String,
+    /// Timeout koneksi/perintah (detik).
+    pub timeout_secs: u64,
+}
+
+impl Default for SshHostConfig {
+    fn default() -> Self {
+        Self {
+            target: String::new(),
+            port: 22,
+            identity: String::new(),
+            timeout_secs: 60,
+        }
+    }
+}
+
+/// Bagian `[advisor]`: model kedua yang mereview jawaban akhir.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AdvisorConfig {
+    /// Aktifkan review otomatis setelah turn.
+    pub enabled: bool,
+    /// Provider advisor (kosong = provider sesi) — bisa gateway kedua.
+    pub provider: String,
+    /// Model advisor; kosong = pakai model sesi.
+    pub model: String,
+    /// Nama env var kunci provider advisor (kosong = env sesi).
+    pub api_key_env: String,
+}
+
+/// Satu preset model.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ModelPreset {
+    /// Provider id (kosong = provider aktif).
+    pub provider: String,
+    /// Model id.
+    pub model: String,
+    /// Effort (`low`/`medium`/`high`; kosong = default).
+    pub effort: String,
+}
+
+/// Penyedia media eksternal: argv perintah, prompt di stdin, path hasil sebagai argumen terakhir.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MediaConfig {
+    pub tts_command: Vec<String>,
+    pub image_command: Vec<String>,
+}
+
+/// Hook eksternal per event (perintah shell; konteks JSON dikirim di stdin).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HooksConfig {
+    pub before_model: Vec<String>,
+    pub before_tool: Vec<String>,
+    pub after_tool: Vec<String>,
+    pub on_stop: Vec<String>,
+    /// Kata kunci → instruksi tambahan.
+    #[serde(default)]
+    pub magic_keywords: std::collections::BTreeMap<String, String>,
+    /// Pola larangan TTSR; stream dihentikan bila muncul.
+    #[serde(default)]
+    pub ttsr_rules: Vec<String>,
+}
+
+impl HooksConfig {
+    /// Daftar perintah untuk satu event.
+    pub fn untuk(&self, event: &str) -> &[String] {
+        match event {
+            "before_model" => &self.before_model,
+            "before_tool" => &self.before_tool,
+            "after_tool" => &self.after_tool,
+            "on_stop" => &self.on_stop,
+            _ => &[],
+        }
+    }
+}
+
+/// Satu provider broker OAuth 2.1 (authorization code + PKCE).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct OAuthBrokerEntry {
+    /// Client ID publik.
+    pub client_id: String,
+    /// Nama env var untuk client secret (boleh kosong untuk client publik).
+    pub client_secret_env: String,
+    /// Endpoint authorization.
+    pub authorize_url: String,
+    /// Endpoint token.
+    pub token_url: String,
+    /// Redirect URI terdaftar.
+    pub redirect_uri: String,
+    /// Scope yang diminta.
+    pub scopes: Vec<String>,
+}
+
+/// Bagian `[debug]`: adapter DAP yang dipakai tool `debug`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DebugConfig {
+    /// Aktifkan tool `debug`.
+    pub enabled: bool,
+    /// Perintah adapter (mis. `debugpy`, `dlv`, `lldb-dap`).
+    pub command: String,
+    /// Argumen perintah.
+    pub args: Vec<String>,
+    /// Timeout satu sesi (detik; 0 = 10).
+    pub timeout_secs: u64,
+}
+
+/// Bagian `[lsp]`: server Language Server Protocol yang dipakai tool `lsp`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct LspConfig {
+    /// Aktifkan tool `lsp`.
+    pub enabled: bool,
+    /// Perintah server LSP (mis. `rust-analyzer`, `gopls`).
+    pub command: String,
+    /// Argumen perintah.
+    pub args: Vec<String>,
+    /// Timeout satu permintaan (detik; 0 = 10).
+    pub timeout_secs: u64,
+}
+
+/// Bagian `[acp_client]`: agen ACP eksternal yang dipakai sebagai subagent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AcpClientConfig {
+    /// Aktifkan tool `acp_subagent`.
+    pub enabled: bool,
+    /// Perintah agen ACP eksternal (kosong = tidak ada).
+    pub command: String,
+    /// Argumen perintah.
+    pub args: Vec<String>,
+    /// Timeout satu sesi ACP (detik; 0 = 120).
+    pub timeout_secs: u64,
+}
+
+/// Bagian `[collab]`: relay WebSocket in-TUI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CollabConfig {
+    /// Port relay loopback.
+    pub port: u16,
+    /// URL relay remote (wss://…) untuk `/collab join`; kosong = lokal.
+    pub remote_url: String,
+}
+
+impl Default for CollabConfig {
+    fn default() -> Self {
+        Self {
+            port: 7_475,
+            remote_url: String::new(),
+        }
+    }
+}
+
+/// OAuth 2.1 untuk satu server MCP (authorization code + PKCE).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct McpOAuthConfig {
+    /// Client id yang terdaftar di server OAuth.
+    pub client_id: String,
+    /// Endpoint authorization; kosong = discovery dari URL server MCP.
+    pub authorization_url: String,
+    /// Endpoint token; kosong = discovery.
+    pub token_url: String,
+    /// Scope yang diminta.
+    pub scopes: Vec<String>,
+    /// Port loopback redirect; 0 = pilih port bebas.
+    pub redirect_port: u16,
+}
+
 /// Bagian `[catalog]`: direktori rules omp untuk integrasi katalog runtime.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -86,6 +397,9 @@ pub struct UiConfig {
     pub accent: String,
     /// Warna redup (`#rrggbb`) untuk hint dan teks sekunder.
     pub dim: String,
+    /// Override tombol: aksi → spec, mis. `palette = "ctrl+p"`.
+    #[serde(default)]
+    pub keybindings: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for UiConfig {
@@ -93,6 +407,7 @@ impl Default for UiConfig {
         Self {
             accent: "#d7a05b".to_string(),
             dim: "#8a8f98".to_string(),
+            keybindings: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -149,6 +464,11 @@ impl McpConfig {
             if server.timeout_secs == Some(0) {
                 return Err(format!("mcp.servers.{nama}.timeout_secs harus > 0"));
             }
+            if let Some(oauth) = &server.oauth
+                && oauth.client_id.trim().is_empty()
+            {
+                return Err(format!("mcp.servers.{nama}.oauth.client_id wajib diisi"));
+            }
         }
         Ok(())
     }
@@ -176,6 +496,9 @@ pub struct McpServerConfig {
     pub env: BTreeMap<String, String>,
     /// Timeout per request; `None` = `mcp.timeout_secs`.
     pub timeout_secs: Option<u64>,
+    /// OAuth per server; `None` = tanpa OAuth (header/env tetap berlaku).
+    #[serde(default)]
+    pub oauth: Option<McpOAuthConfig>,
     /// Apakah server dijalankan (default `true`).
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -219,13 +542,12 @@ impl GatewayConfig {
         let env_bawaan_lain = tui_wire::providers::all()
             .iter()
             .any(|p| p.id != entry.id && p.env_keys.first() == Some(&self.api_key_env));
-        if self.api_key_env.is_empty()
+        if (self.api_key_env.is_empty()
             || self.api_key_env == default_env_for(&entry.id)
-            || env_bawaan_lain
+            || env_bawaan_lain)
+            && let Some(env) = entry.env_keys.first()
         {
-            if let Some(env) = entry.env_keys.first() {
-                self.api_key_env = env.clone();
-            }
+            self.api_key_env = env.clone();
         }
         Ok(())
     }
@@ -520,6 +842,13 @@ impl LoadedConfig {
 
 /// Path config global: `%APPDATA%\ModeluXAI\TUI\config.toml` di Windows.
 pub fn default_global_path() -> Option<PathBuf> {
+    // Menghormati MAICLI_DATA_DIR agar test/sesi portabel menulis ke folder
+    // yang sama dengan yang dibaca `config_root()`.
+    if let Some(custom) = std::env::var_os("MAICLI_DATA_DIR")
+        && !custom.is_empty()
+    {
+        return Some(PathBuf::from(custom).join("config.toml"));
+    }
     directories::BaseDirs::new().map(|dirs| {
         dirs.config_dir()
             .join("ModeluXAI")
@@ -601,6 +930,116 @@ pub fn set_global_value(path: &Path, key: &str, raw: &str) -> Result<(), MxError
     // Config memuat pengaturan gateway: batasi ACL ke pengguna saja.
     tui_wire::secure_file::restrict_to_current_user(path)
         .map_err(|e| config_error(path, &format!("gagal membatasi izin: {e}")))
+}
+
+/// Nama preset/host yang aman dipakai sebagai kunci TOML.
+fn nama_kunci_sah(nama: &str) -> bool {
+    !nama.is_empty()
+        && nama
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Tulis satu nilai TOML bertipe ke config global (`a.b = value`).
+///
+/// Dipakai preset dan host SSH yang nilainya berupa tabel, bukan skalar.
+/// Validasi penuh dilakukan sebelum file ditulis, seperti `set_global_value`.
+pub fn set_global_toml_value(path: &Path, key: &str, value: toml::Value) -> Result<(), MxError> {
+    let existing = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => return Err(config_error(path, &format!("tidak bisa dibaca: {err}"))),
+    };
+    let mut table: toml::Value = if existing.trim().is_empty() {
+        toml::Value::Table(toml::map::Map::new())
+    } else {
+        toml::from_str(&existing).map_err(|e| config_error(path, &e.to_string()))?
+    };
+    let root = table
+        .as_table_mut()
+        .ok_or_else(|| config_error(path, "isi config bukan tabel TOML"))?;
+    let segments: Vec<&str> = key.split('.').filter(|s| !s.is_empty()).collect();
+    let (Some((last, parents)), true) = (segments.split_last(), segments.len() >= 2) else {
+        return Err(MxError::new(
+            ErrorCode::Config,
+            format!("key '{key}' harus berbentuk bagian.nama"),
+        ));
+    };
+    let mut node = root;
+    for segment in parents {
+        node = node
+            .entry((*segment).to_string())
+            .or_insert(toml::Value::Table(toml::map::Map::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                MxError::new(
+                    ErrorCode::Config,
+                    format!("bagian config '{segment}' bukan tabel"),
+                )
+            })?;
+    }
+    node.insert((*last).to_string(), value);
+    let text = toml::to_string_pretty(&table)
+        .map_err(|e| config_error(path, &format!("tidak bisa diserialisasi: {e}")))?;
+    let parsed: Config = toml::from_str(&text).map_err(|e| {
+        if e.message().starts_with("unknown field") {
+            MxError::new(
+                ErrorCode::Config,
+                format!("kunci config tidak dikenal: {}", e.message()),
+            )
+        } else {
+            config_error(path, &e.to_string())
+        }
+    })?;
+    parsed
+        .ui
+        .validate()
+        .map_err(|detail| MxError::new(ErrorCode::Config, detail))?;
+    parsed
+        .memory
+        .validate()
+        .map_err(|detail| MxError::new(ErrorCode::Config, detail))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| config_error(path, &e.to_string()))?;
+    }
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, text.as_bytes()).map_err(|e| config_error(path, &e.to_string()))?;
+    let _ = std::fs::remove_file(path);
+    std::fs::rename(&tmp, path).map_err(|e| config_error(path, &e.to_string()))?;
+    tui_wire::secure_file::restrict_to_current_user(path)
+        .map_err(|e| config_error(path, &format!("gagal membatasi izin: {e}")))
+}
+
+/// Simpan satu preset model ke config global.
+pub fn set_global_preset(path: &Path, name: &str, preset: &ModelPreset) -> Result<(), MxError> {
+    if !nama_kunci_sah(name) {
+        return Err(MxError::new(
+            ErrorCode::Config,
+            format!("nama preset '{name}' tidak sah (alfanumerik/-/_)"),
+        ));
+    }
+    let value = toml::Value::try_from(preset)
+        .map_err(|e| config_error(path, &format!("preset tidak bisa diserialisasi: {e}")))?;
+    set_global_toml_value(path, &format!("presets.{name}"), value)
+}
+
+/// Simpan satu host SSH ke config global.
+pub fn set_global_ssh_host(path: &Path, name: &str, host: &SshHostConfig) -> Result<(), MxError> {
+    if !nama_kunci_sah(name) {
+        return Err(MxError::new(
+            ErrorCode::Config,
+            format!("nama host '{name}' tidak sah (alfanumerik/-/_)"),
+        ));
+    }
+    if host.target.trim().is_empty() || host.target.chars().any(char::is_whitespace) {
+        return Err(MxError::new(
+            ErrorCode::Config,
+            "target SSH wajib diisi tanpa spasi".to_string(),
+        ));
+    }
+    let value = toml::Value::try_from(host)
+        .map_err(|e| config_error(path, &format!("host tidak bisa diserialisasi: {e}")))?;
+    set_global_toml_value(path, &format!("ssh.hosts.{name}"), value)
 }
 
 /// Hapus satu kunci dari config global (dipakai `/mcp remove`).
@@ -768,6 +1207,16 @@ pub fn load(global: Option<&Path>, project: Option<&Path>) -> Result<LoadedConfi
         .mcp
         .validate()
         .map_err(|detail| MxError::new(ErrorCode::Config, detail))?;
+    config
+        .memory
+        .validate()
+        .map_err(|detail| MxError::new(ErrorCode::Config, detail))?;
+    if config.collab.port == 0 {
+        return Err(MxError::new(
+            ErrorCode::Config,
+            "collab.port harus > 0".to_string(),
+        ));
+    }
     config
         .gateway
         .sinkron_provider()
@@ -1224,6 +1673,61 @@ mod tests {
         assert_eq!(policy.tools.get("bash"), Some(&ToolPolicy::Deny));
         assert!(policy.restricted_folders.is_empty());
     }
+    #[test]
+    fn memory_backend_asing_ditolak_sebelum_dipakai() {
+        let memory = MemoryConfig {
+            backend: "dunia".to_string(),
+            ..MemoryConfig::default()
+        };
+        assert!(memory.validate().is_err());
+        let memory = MemoryConfig {
+            backend: "sqlite".to_string(),
+            embedding: "neural".to_string(),
+            ..MemoryConfig::default()
+        };
+        assert!(memory.validate().is_err());
+    }
+
+    #[test]
+    fn preset_dan_host_ssh_tersimpan_dan_terbaca() {
+        let dir = temp_dir("preset-ssh");
+        let path = dir.join("config.toml");
+        let preset = ModelPreset {
+            provider: "modeluxai".to_string(),
+            model: "m".to_string(),
+            effort: "high".to_string(),
+        };
+        set_global_preset(&path, "kerja", &preset).unwrap();
+        let host = SshHostConfig {
+            target: "u@h".to_string(),
+            port: 2222,
+            ..SshHostConfig::default()
+        };
+        set_global_ssh_host(&path, "prod", &host).unwrap();
+        let loaded = load(Some(&path), None).unwrap();
+        assert_eq!(loaded.config.presets.get("kerja"), Some(&preset));
+        let host = loaded.config.ssh.hosts.get("prod").unwrap();
+        assert_eq!(host.target, "u@h");
+        assert_eq!(host.port, 2222);
+        assert!(remove_global_value(&path, "presets.kerja").unwrap());
+        let loaded = load(Some(&path), None).unwrap();
+        assert!(loaded.config.presets.is_empty());
+    }
+
+    #[test]
+    fn oauth_mcp_tanpa_client_id_ditolak() {
+        let mut config = McpConfig::default();
+        config.servers.insert(
+            "x".to_string(),
+            McpServerConfig {
+                url: Some("https://x/mcp".to_string()),
+                oauth: Some(McpOAuthConfig::default()),
+                ..McpServerConfig::default()
+            },
+        );
+        assert!(config.validate().is_err());
+    }
+
     #[test]
     fn file_tidak_ada_bukan_error() {
         let dir = temp_dir("missing");

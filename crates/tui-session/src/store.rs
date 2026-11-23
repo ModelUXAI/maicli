@@ -1,5 +1,6 @@
 //! Penulisan dan pembacaan file sesi JSONL.
 
+use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -350,6 +351,32 @@ pub fn resume_messages(entries: &[SessionEntry]) -> Vec<tui_wire::Message> {
     }
     messages
 }
+/// Daftar pesan yang saat ini disematkan: (index 1-based, cuplikan).
+///
+/// Entry `pin` berturut-turut untuk index yang sama saling menimpa, sehingga
+/// sematan lalu pelepasan mengikuti urutan penulisan.
+pub fn pins(path: &Path) -> Vec<(u64, String)> {
+    let Ok(loaded) = SessionStore::load(path) else {
+        return Vec::new();
+    };
+    let mut map: BTreeMap<u64, (bool, String)> = BTreeMap::new();
+    for entry in &loaded.entries {
+        if let SessionEntry::Pin {
+            index,
+            pinned,
+            preview,
+            ..
+        } = entry
+        {
+            map.insert(*index, (*pinned, preview.clone()));
+        }
+    }
+    map.into_iter()
+        .filter(|(_, (pinned, _))| *pinned)
+        .map(|(index, (_, preview))| (index, preview))
+        .collect()
+}
+
 /// Lock file sesi dianggap basi setelah satu jam tanpa pembaruan.
 pub const LOCK_STALE_AFTER_MS: u64 = 60 * 60 * 1_000;
 
@@ -600,6 +627,34 @@ impl SessionStore {
     /// Ganti judul sesi dengan menambahkan entry `TitleChange`.
     pub fn set_title(&mut self, title: impl Into<String>) -> Result<(), MxError> {
         self.append(&SessionEntry::title_change(title))
+    }
+
+    /// Kembalikan sesi menjadi `jumlah` pesan pertama (dipakai `/rewind`).
+    ///
+    /// Writer ditutup sementara supaya penulisan atomik tidak bertabrakan dengan
+    /// append yang masih terbuka, lalu dibuka kembali di akhir berkas.
+    pub fn rewind_messages(&mut self, jumlah: usize) -> Result<usize, MxError> {
+        self.writer.take();
+        let dimuat = SessionStore::load(&self.path)?;
+        let mut dipertahankan: Vec<SessionEntry> = Vec::new();
+        let mut terlihat = 0usize;
+        for entry in dimuat.entries {
+            if matches!(entry, SessionEntry::Message { .. }) {
+                if terlihat >= jumlah {
+                    break;
+                }
+                terlihat += 1;
+            }
+            dipertahankan.push(entry);
+        }
+        write_atomic(&self.path, &dipertahankan)?;
+        let writer = OpenOptions::new()
+            .append(true)
+            .open(&self.path)
+            .map_err(|e| io_error(e, &self.path))?;
+        self.writer = Some(BufWriter::new(writer));
+        self.written = fs::metadata(&self.path).map(|m| m.len()).unwrap_or(0);
+        Ok(terlihat)
     }
 
     /// Tambahkan satu entry dan paksa flush supaya crash tidak menghilangkan
@@ -1328,6 +1383,18 @@ mod tests {
     }
 
     #[test]
+    fn sematan_terakhir_menang_dan_bisa_dilepas() {
+        let dir = temp_dir("pin");
+        let mut store = SessionStore::create(&dir, "pin", ".").unwrap();
+        store.append(&SessionEntry::pin(2, true, "dua")).unwrap();
+        assert_eq!(pins(store.path()), vec![(2, "dua".to_string())]);
+        store.append(&SessionEntry::pin(2, false, "dua")).unwrap();
+        assert!(pins(store.path()).is_empty());
+        store.append(&SessionEntry::pin(1, true, "satu")).unwrap();
+        assert_eq!(pins(store.path()), vec![(1, "satu".to_string())]);
+    }
+
+    #[test]
     fn file_tanpa_header_ditolak() {
         let dir = temp_dir("noheader");
         let path = dir.join("x.jsonl");
@@ -1341,5 +1408,42 @@ mod tests {
         .unwrap();
         let err = SessionStore::load(&path).unwrap_err();
         assert_eq!(err.code, ErrorCode::SessionCorrupt);
+    }
+}
+
+#[cfg(test)]
+mod rewind_tests {
+    #![allow(clippy::unwrap_used, clippy::panic)]
+
+    use super::*;
+
+    #[test]
+    fn rewind_memotong_file_sesi() {
+        let dir = std::env::temp_dir().join(format!(
+            "maicli-rewind-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut store = SessionStore::create(&dir, "rewind", ".").unwrap();
+        for i in 0..3 {
+            store
+                .append(&SessionEntry::message(
+                    None,
+                    tui_wire::Message::User {
+                        content: format!("m{i}"),
+                    },
+                ))
+                .unwrap();
+        }
+        assert_eq!(store.rewind_messages(1).unwrap(), 1);
+        assert_eq!(
+            SessionStore::load(store.path()).unwrap().messages().len(),
+            1
+        );
+        std::fs::remove_dir_all(dir).ok();
     }
 }

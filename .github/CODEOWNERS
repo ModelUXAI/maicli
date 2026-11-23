@@ -1,0 +1,12 @@
+# Default owner: maintainer proyek.
+* @modeluxai
+
+# Area yang butuh review maintainer.
+/.github/ @modeluxai
+/check.sh @modeluxai
+/check.ps1 @modeluxai
+/deny.toml @modeluxai
+/Cargo.toml @modeluxai
+/Cargo.lock @modeluxai
+/docs/ @modeluxai
+/scripts/ @modeluxai

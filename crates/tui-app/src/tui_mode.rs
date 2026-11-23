@@ -32,6 +32,7 @@ use tui_wire::{AgentEvent, ErrorCode, MxError, ProviderEvent, SessionChoice};
 
 use crate::Boot;
 use crate::approvals::{ChannelDecisionUi, PendingApproval, build_approver};
+use crate::features::{FeatureAction, FeatureState};
 
 /// Pertanyaan dari tool `ask` yang menunggu jawaban pengguna.
 struct PendingQuestion {
@@ -210,6 +211,7 @@ struct Screen {
     question: Option<PendingQuestion>,
     accent: Color,
     dim: Color,
+    keybindings: std::collections::HashMap<String, KeyEvent>,
     scroll: u16,
     view_height: u16,
     view_width: u16,
@@ -251,6 +253,19 @@ struct Screen {
 }
 
 impl Screen {
+    /// Pasang override tombol dari config; spec invalid diabaikan.
+    fn set_keybindings(&mut self, config: &std::collections::BTreeMap<String, String>) {
+        self.keybindings = config
+            .iter()
+            .filter_map(|(aksi, spec)| parse_key(spec).map(|k| (aksi.clone(), k)))
+            .collect();
+    }
+
+    /// Apakah tombol ini merupakan override untuk aksi tertentu.
+    fn key_override(&self, aksi: &str, key: KeyEvent) -> bool {
+        self.keybindings.get(aksi).is_some_and(|k| *k == key)
+    }
+
     fn new(
         model: String,
         approval_mode: tui_approval::ApprovalMode,
@@ -269,6 +284,7 @@ impl Screen {
             question: None,
             accent,
             dim,
+            keybindings: std::collections::HashMap::new(),
             scroll: 0,
             view_height: 1,
             view_width: 80,
@@ -503,11 +519,11 @@ impl Screen {
         let mut total = 0usize;
         for (index, line) in self.lines.iter().enumerate() {
             total += display_rows(line, width);
-            if self.expanded_tools {
-                if let Some(detail) = self.tool_details.get(&index) {
-                    for detail_line in detail.split('\n') {
-                        total += display_rows(detail_line, width);
-                    }
+            if self.expanded_tools
+                && let Some(detail) = self.tool_details.get(&index)
+            {
+                for detail_line in detail.split('\n') {
+                    total += display_rows(detail_line, width);
                 }
             }
         }
@@ -534,11 +550,11 @@ impl Screen {
         let mut total = 0usize;
         for (position, line) in self.lines.iter().enumerate().take(index) {
             total += display_rows(line, width);
-            if self.expanded_tools {
-                if let Some(detail) = self.tool_details.get(&position) {
-                    for detail_line in detail.split('\n') {
-                        total += display_rows(detail_line, width);
-                    }
+            if self.expanded_tools
+                && let Some(detail) = self.tool_details.get(&position)
+            {
+                for detail_line in detail.split('\n') {
+                    total += display_rows(detail_line, width);
                 }
             }
         }
@@ -714,14 +730,14 @@ impl Screen {
                 continue;
             }
             lines.push(styled_line(line, self.accent, self.dim));
-            if self.expanded_tools {
-                if let Some(detail) = self.tool_details.get(&index) {
-                    for detail_line in detail.split('\n') {
-                        lines.push(Line::from(Span::styled(
-                            format!("   {detail_line}"),
-                            Style::default().fg(self.dim),
-                        )));
-                    }
+            if self.expanded_tools
+                && let Some(detail) = self.tool_details.get(&index)
+            {
+                for detail_line in detail.split('\n') {
+                    lines.push(Line::from(Span::styled(
+                        format!("   {detail_line}"),
+                        Style::default().fg(self.dim),
+                    )));
                 }
             }
             index += 1;
@@ -903,10 +919,10 @@ impl Screen {
             secs / 60,
             secs % 60
         );
-        if let Some(index) = self.pending_countdown_line {
-            if let Some(line) = self.lines.get_mut(index) {
-                *line = text;
-            }
+        if let Some(index) = self.pending_countdown_line
+            && let Some(line) = self.lines.get_mut(index)
+        {
+            *line = text;
         }
         if let Some(index) = self.pending_choice_line {
             let choice = match self.pending_choice {
@@ -922,15 +938,15 @@ impl Screen {
 
     /// Catat keputusan approval pada blok inline lalu bersihkan state pending.
     fn close_pending_lines(&mut self, label: &str) {
-        if let Some(index) = self.pending_choice_line {
-            if let Some(line) = self.lines.get_mut(index) {
-                *line = format!("   keputusan: {label}");
-            }
+        if let Some(index) = self.pending_choice_line
+            && let Some(line) = self.lines.get_mut(index)
+        {
+            *line = format!("   keputusan: {label}");
         }
-        if let Some(index) = self.pending_countdown_line {
-            if let Some(line) = self.lines.get_mut(index) {
-                line.clear();
-            }
+        if let Some(index) = self.pending_countdown_line
+            && let Some(line) = self.lines.get_mut(index)
+        {
+            line.clear();
         }
         self.pending_choice_line = None;
         self.pending_countdown_line = None;
@@ -938,7 +954,9 @@ impl Screen {
         self.pending_since = None;
     }
     fn handle_key(&mut self, key: KeyEvent, commands: &UnboundedSender<Command>) -> Option<Action> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+        if self.key_override("cancel", key)
+            || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c'))
+        {
             // Turn berjalan: Ctrl+C membatalkan dulu. Idle: perlu dua kali
             // berturut-turut supaya satu tombol tidak langsung menutup sesi.
             if self.busy {
@@ -954,7 +972,9 @@ impl Screen {
             return None;
         }
         self.quit_armed = false;
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('k') {
+        if self.key_override("palette", key)
+            || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('k'))
+        {
             self.show_help = false;
             self.picker = None;
             self.palette = Some(Palette {
@@ -966,17 +986,25 @@ impl Screen {
         if self.palette.is_some() {
             return self.palette_key(key);
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u') {
+        if self.key_override("clear_input", key)
+            || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u'))
+        {
             self.input.clear();
             return None;
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('e') {
+        if self.key_override("tool_details", key)
+            || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('e'))
+        {
             self.expanded_tools = !self.expanded_tools;
             self.status = if self.expanded_tools {
                 "detail tool ditampilkan (Ctrl+E untuk ringkas)".to_string()
             } else {
                 "detail tool disembunyikan (Ctrl+E untuk buka)".to_string()
             };
+            return None;
+        }
+        if self.key_override("help", key) {
+            self.show_help = true;
             return None;
         }
         if self.show_help {
@@ -1178,10 +1206,9 @@ impl Screen {
                 }
                 Aksi::Turun => {
                     if let (Some(hub), Some(manager)) = (self.hub.as_mut(), self.subagents.as_ref())
+                        && hub.selected + 1 < manager.list().len()
                     {
-                        if hub.selected + 1 < manager.list().len() {
-                            hub.selected += 1;
-                        }
+                        hub.selected += 1;
                     }
                 }
                 Aksi::Mode(mode) => {
@@ -1411,6 +1438,39 @@ fn timeline_label(text: &str) -> String {
     }
 }
 
+/// Bangun sesi dengan registry standar (dipakai `/new`, `/fork`, `/switch`).
+fn build_agent_session(
+    boot: &Boot,
+    carry: Option<&AgentSession>,
+    approver: Arc<dyn Approver>,
+    ask: UnboundedSender<AskRequest>,
+    events: UnboundedSender<AgentEvent>,
+    model: &str,
+    skills_on: bool,
+) -> AgentSession {
+    let settings = TurnSettings {
+        model: model.to_string(),
+        deadline: Some(Duration::from_secs(boot.limits.turn_deadline_secs)),
+        system_prompt: crate::features::base_system_prompt(boot, skills_on),
+        ..TurnSettings::default()
+    };
+    let mut session = AgentSession::new(
+        Arc::new(boot.client.clone()),
+        approver,
+        boot.tool_registry(),
+        tool_context_for(boot, ask),
+        settings,
+        events,
+    );
+    session.set_context_window(boot.limits.context_window_tokens);
+    crate::hooks::pasang(&mut session, &boot.config.hooks);
+    if let Some(lama) = carry {
+        session.set_service_tier(lama.service_tier().map(str::to_string));
+        session.set_effort(lama.effort().map(str::to_string));
+    }
+    session
+}
+
 fn spawn_worker(
     boot: Boot,
     events: UnboundedSender<AgentEvent>,
@@ -1425,6 +1485,9 @@ fn spawn_worker(
         let skills_ringkas = tui_tools::skills::ringkas_daftar(&boot.skills);
         let mut effort_aktif: Option<String> = None;
         let mut force_aktif = false;
+        let mut fitur = FeatureState::new(&boot);
+        // Siaran guest relay diteruskan ke timeline mode ini.
+        fitur.events = Some(events.clone());
         let approval_timeout = Duration::from_secs(boot.limits.approval_timeout_secs);
         let approver: Arc<dyn Approver> = match build_approver(
             boot.approval.clone(),
@@ -1443,11 +1506,7 @@ fn spawn_worker(
         let settings = TurnSettings {
             model: boot.model.clone(),
             deadline: Some(Duration::from_secs(boot.limits.turn_deadline_secs)),
-            system_prompt: {
-                let mut sp = TurnSettings::default().system_prompt;
-                sp.push_str(&tui_tools::skills::ringkas_daftar(&boot.skills));
-                sp
-            },
+            system_prompt: crate::features::base_system_prompt(&boot, true),
             ..TurnSettings::default()
         };
         let events_tx = events.clone();
@@ -1480,6 +1539,8 @@ fn spawn_worker(
         }
         let tool_names = registry.names();
         let todo_arc = registry.todo_arc();
+        // Daftar todo dipakai command /todo export/import/copy.
+        fitur.todo = Some(todo_arc.clone());
         let mut session = AgentSession::new(
             Arc::new(boot.client.clone()),
             approver,
@@ -1559,29 +1620,15 @@ fn spawn_worker(
                             {
                                 Ok(new_store) => {
                                     let path = new_store.path().display().to_string();
-                                    let mut fresh = AgentSession::new(
-                                        Arc::new(boot.client.clone()),
+                                    session = build_agent_session(
+                                        &boot,
+                                        Some(&session),
                                         approver_for_switch.clone(),
-                                        boot.tool_registry(),
-                                        tool_context_for(&boot, ask_for_switch.clone()),
-                                        TurnSettings {
-                                            model: boot.model.clone(),
-                                            deadline: Some(Duration::from_secs(
-                                                boot.limits.turn_deadline_secs,
-                                            )),
-                                            system_prompt: {
-                                                let mut sp = TurnSettings::default().system_prompt;
-                                                sp.push_str(&tui_tools::skills::ringkas_daftar(
-                                                    &boot.skills,
-                                                ));
-                                                sp
-                                            },
-                                            ..TurnSettings::default()
-                                        },
+                                        ask_for_switch.clone(),
                                         events_tx.clone(),
+                                        &boot.model,
+                                        fitur.skills_on,
                                     );
-                                    fresh.set_context_window(boot.limits.context_window_tokens);
-                                    session = fresh;
                                     store = Some(new_store);
                                     persisted_usage = tui_wire::Usage::default();
                                     let _ = events_tx.send(AgentEvent::SessionSwitched {
@@ -1614,30 +1661,16 @@ fn spawn_worker(
                                 Ok((new_store, messages)) => {
                                     let path = new_store.path().display().to_string();
                                     let count = messages.len();
-                                    let mut fresh = AgentSession::new(
-                                        Arc::new(boot.client.clone()),
+                                    session = build_agent_session(
+                                        &boot,
+                                        Some(&session),
                                         approver_for_switch.clone(),
-                                        boot.tool_registry(),
-                                        tool_context_for(&boot, ask_for_switch.clone()),
-                                        TurnSettings {
-                                            model: boot.model.clone(),
-                                            deadline: Some(Duration::from_secs(
-                                                boot.limits.turn_deadline_secs,
-                                            )),
-                                            system_prompt: {
-                                                let mut sp = TurnSettings::default().system_prompt;
-                                                sp.push_str(&tui_tools::skills::ringkas_daftar(
-                                                    &boot.skills,
-                                                ));
-                                                sp
-                                            },
-                                            ..TurnSettings::default()
-                                        },
+                                        ask_for_switch.clone(),
                                         events_tx.clone(),
+                                        &boot.model,
+                                        fitur.skills_on,
                                     );
-                                    fresh.set_context_window(boot.limits.context_window_tokens);
-                                    fresh.push_messages(messages);
-                                    session = fresh;
+                                    session.push_messages(messages);
                                     store = Some(new_store);
                                     persisted_usage = session.usage();
                                     let _ = events_tx.send(AgentEvent::SessionSwitched {
@@ -1894,6 +1927,46 @@ fn spawn_worker(
                                     }
                                 }
                                 ('c', _) => Ok(Vec::new()),
+                                ('s', Some(no)) => {
+                                    let n: usize = no.parse().unwrap_or(0);
+                                    if n >= 1 && n <= daftar.len() {
+                                        daftar[n - 1] = format!("[mulai] {}", daftar[n - 1]);
+                                        Ok(daftar)
+                                    } else {
+                                        Err(format!(
+                                            "nomor {no} tidak ada di daftar ({})",
+                                            daftar.len()
+                                        ))
+                                    }
+                                }
+                                ('x', Some(no)) => {
+                                    let n: usize = no.parse().unwrap_or(0);
+                                    if n >= 1 && n <= daftar.len() {
+                                        daftar[n - 1] = format!("[dibuang] {}", daftar[n - 1]);
+                                        Ok(daftar)
+                                    } else {
+                                        Err(format!(
+                                            "nomor {no} tidak ada di daftar ({})",
+                                            daftar.len()
+                                        ))
+                                    }
+                                }
+                                ('p', Some(isi)) => match isi.split_once(char::is_whitespace) {
+                                    Some((no, teks)) => {
+                                        let n: usize = no.parse().unwrap_or(0);
+                                        if n >= 1 && n <= daftar.len() {
+                                            daftar[n - 1] =
+                                                format!("{} {}", daftar[n - 1], teks.trim());
+                                            Ok(daftar)
+                                        } else {
+                                            Err(format!(
+                                                "nomor {no} tidak ada di daftar ({})",
+                                                daftar.len()
+                                            ))
+                                        }
+                                    }
+                                    None => Err("pakai /todo append <nomor> <teks>".to_string()),
+                                },
                                 _ => Err("subcommand todo tidak dikenal".to_string()),
                             };
                             match hasil {
@@ -1989,30 +2062,16 @@ fn spawn_worker(
                             match opened {
                                 Ok(Ok((summary, messages, fresh_store))) => {
                                     let count = messages.len();
-                                    let mut fresh = AgentSession::new(
-                                        Arc::new(boot.client.clone()),
+                                    session = build_agent_session(
+                                        &boot,
+                                        Some(&session),
                                         approver_for_switch.clone(),
-                                        boot.tool_registry(),
-                                        tool_context_for(&boot, ask_for_switch.clone()),
-                                        TurnSettings {
-                                            model: boot.model.clone(),
-                                            deadline: Some(Duration::from_secs(
-                                                boot.limits.turn_deadline_secs,
-                                            )),
-                                            system_prompt: {
-                                                let mut sp = TurnSettings::default().system_prompt;
-                                                sp.push_str(&tui_tools::skills::ringkas_daftar(
-                                                    &boot.skills,
-                                                ));
-                                                sp
-                                            },
-                                            ..TurnSettings::default()
-                                        },
+                                        ask_for_switch.clone(),
                                         events_tx.clone(),
+                                        &boot.model,
+                                        fitur.skills_on,
                                     );
-                                    fresh.set_context_window(boot.limits.context_window_tokens);
-                                    fresh.push_messages(messages);
-                                    session = fresh;
+                                    session.push_messages(messages);
                                     store = Some(fresh_store);
                                     let _ = events_tx.send(AgentEvent::SessionSwitched {
                                         path: summary.path.display().to_string(),
@@ -2089,6 +2148,58 @@ fn spawn_worker(
                             let _ = events_tx.send(AgentEvent::Notice { text });
                             continue;
                         }
+                        CommandResult::Feature { name, argument } => {
+                            match crate::features::handle(
+                                &boot,
+                                &mut session,
+                                &mut store,
+                                &mut fitur,
+                                &name,
+                                argument.as_deref(),
+                            )
+                            .await
+                            {
+                                FeatureAction::Lines(lines) => {
+                                    for line in lines {
+                                        let _ = events_tx.send(AgentEvent::Notice { text: line });
+                                    }
+                                }
+                                FeatureAction::Fresh => {
+                                    let text = match crate::session_open::create_new(
+                                        boot.sessions_dir.clone(),
+                                        boot.cwd.display().to_string(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(new_store) => {
+                                            let path = new_store.path().display().to_string();
+                                            session = build_agent_session(
+                                                &boot,
+                                                Some(&session),
+                                                approver_for_switch.clone(),
+                                                ask_for_switch.clone(),
+                                                events_tx.clone(),
+                                                &boot.model,
+                                                fitur.skills_on,
+                                            );
+                                            store = Some(new_store);
+                                            persisted_usage = tui_wire::Usage::default();
+                                            approver_for_switch.forget_grants();
+                                            let _ = events_tx.send(AgentEvent::SessionSwitched {
+                                                path: path.clone(),
+                                                messages: 0,
+                                            });
+                                            format!("sesi baru (fresh): {path} — grant dihapus")
+                                        }
+                                        Err(err) => {
+                                            format!("{}: {}", err.code, err.message)
+                                        }
+                                    };
+                                    let _ = events_tx.send(AgentEvent::Notice { text });
+                                }
+                            }
+                            continue;
+                        }
                         CommandResult::Unknown(message) => {
                             let _ = events_tx.send(AgentEvent::Notice { text: message });
                             continue;
@@ -2138,6 +2249,13 @@ fn spawn_worker(
                                 },
                             }
                         }
+                    }
+                    // Review model kedua (opsional, `/advisor on`).
+                    if fitur.advisor_on
+                        && let Some(text) =
+                            crate::features::advisor_review(&boot, &fitur, &session).await
+                    {
+                        let _ = events_tx.send(AgentEvent::Notice { text });
                     }
                     // Pulihkan approval setelah yolo satu turn (di luar borrow run).
                     if force_aktif {
@@ -2198,6 +2316,40 @@ fn spawn_worker(
         }
     });
     tx
+}
+
+/// Parse spesifikasi tombol config (`ctrl+k`, `f1`, `alt+a`, `?`).
+pub fn parse_key(spec: &str) -> Option<KeyEvent> {
+    let bagian: Vec<&str> = spec.trim().split('+').collect();
+    let (mods, terakhir) = bagian.split_at(bagian.len().saturating_sub(1));
+    let mut modifiers = KeyModifiers::NONE;
+    for m in mods {
+        modifiers |= match m.trim().to_ascii_lowercase().as_str() {
+            "ctrl" => KeyModifiers::CONTROL,
+            "alt" => KeyModifiers::ALT,
+            "shift" => KeyModifiers::SHIFT,
+            _ => return None,
+        };
+    }
+    let nama = terakhir.first().copied()?.trim().to_ascii_lowercase();
+    let kode = match nama.as_str() {
+        "esc" | "escape" => KeyCode::Esc,
+        "enter" => KeyCode::Enter,
+        "tab" => KeyCode::Tab,
+        "backspace" => KeyCode::Backspace,
+        "space" => KeyCode::Char(' '),
+        "?" => KeyCode::Char('?'),
+        _ if nama.starts_with('f') => {
+            let n = nama[1..].parse::<u8>().ok()?;
+            if n == 0 {
+                return None;
+            }
+            KeyCode::F(n)
+        }
+        _ if nama.len() == 1 => KeyCode::Char(nama.chars().next()?),
+        _ => return None,
+    };
+    Some(KeyEvent::new(kode, modifiers))
 }
 
 /// Ubah `#rrggbb` (atau `#rgb`) menjadi warna ratatui; nilai tak valid = Reset.
@@ -2377,16 +2529,16 @@ fn inline_spans(text: &str, accent: Color, dim: Color) -> Vec<Span<'static>> {
             index += 2 + close + 2;
             continue;
         }
-        if text[index..].starts_with('`') {
-            if let Some(close) = text[index + 1..].find('`') {
-                if !plain.is_empty() {
-                    spans.push(Span::raw(std::mem::take(&mut plain)));
-                }
-                let code = &text[index + 1..index + 1 + close];
-                spans.push(Span::styled(code.to_string(), Style::default().fg(dim)));
-                index += 1 + close + 1;
-                continue;
+        if text[index..].starts_with('`')
+            && let Some(close) = text[index + 1..].find('`')
+        {
+            if !plain.is_empty() {
+                spans.push(Span::raw(std::mem::take(&mut plain)));
             }
+            let code = &text[index + 1..index + 1 + close];
+            spans.push(Span::styled(code.to_string(), Style::default().fg(dim)));
+            index += 1 + close + 1;
+            continue;
         }
         let Some(ch) = text[index..].chars().next() else {
             break;
@@ -2646,7 +2798,7 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
     let accent = parse_color(&boot.ui.accent);
     let dim = parse_color(&boot.ui.dim);
     let (events_tx, mut events_rx, event_log_done) =
-        crate::event_log::channel(boot.event_log.clone());
+        crate::event_log::channel_with_recorder(boot.recorder.clone());
     // Penerus notifikasi: idle-timeout mencegah deadlock; abort saat keluar.
     let notif_task = boot
         .notif_rx
@@ -2662,9 +2814,11 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
     // Katalog di-clone sebelum boot dipindah ke worker (dipakai picker/kendali).
     let katalog = boot.katalog.clone();
     let known_models: Vec<String> = boot.models.clone();
+    let keybindings = boot.ui.keybindings.clone();
     let commands = spawn_worker(boot, events_tx, approvals_tx, questions_tx);
 
     let mut screen = Screen::new(model, approval_mode, accent, dim, approval_timeout);
+    screen.set_keybindings(&keybindings);
     if let Some(manager) = subagents.clone() {
         screen.set_subagents(manager.clone());
         // Kolektor event: langgani anak baru di roster, rekam ke buffer panel.
@@ -4024,7 +4178,16 @@ provider "uji-cat2" {
             grants_path: dir.join("grants.json"),
             ui: UiConfig::default(),
             models: Vec::new(),
-            event_log: None,
+            recorder: crate::event_log::Recorder::new(dir.join("events.jsonl"), false),
+            config: tui_config::Config::default(),
+            memory: None,
+            context_files: Vec::new(),
+            context_notes: Vec::new(),
+            annotations: Vec::new(),
+            notifications: Vec::new(),
+            plan: String::new(),
+            tool_issues: Vec::new(),
+            system_prompt: String::new(),
             grant_ttl: None,
             provider: ("modeluxai".to_string(), "MODELUXAI_API_KEY".to_string()),
             mcp_tools: Vec::new(),
@@ -4882,5 +5045,17 @@ provider "uji-cat2" {
                 .iter()
                 .any(|line| line.contains("gateway menolak"))
         );
+    }
+    #[test]
+    fn parse_key_menerima_modifier() {
+        assert_eq!(
+            parse_key("ctrl+k"),
+            Some(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL))
+        );
+        assert_eq!(
+            parse_key("f1"),
+            Some(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE))
+        );
+        assert!(parse_key("ctrl+unknown").is_none());
     }
 }

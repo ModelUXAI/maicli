@@ -21,7 +21,12 @@ dist/
 /NOT-COMPLETE.md
 /AGENTS.md
 /docs/paritas.md
-/docs/setup-github.md
 /docs/uat-v1.md
 /docs/platform-dan-integrasi.md
+/docs/blocked-external.md
+/docs/owner-handoff.md
 /docs/fase-0/
+
+# Python cache
+__pycache__/
+*.pyc

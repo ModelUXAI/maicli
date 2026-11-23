@@ -14,19 +14,34 @@
     )
 )]
 
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 use tui_wire::{Concurrency, ErrorCode, MxError, ToolDefinition, ToolOutput, ToolTier};
 
+pub mod ast_tools;
+pub mod browser;
 pub mod cancel;
+pub mod context_files;
+pub mod dap;
+pub mod eval;
 pub mod extensions;
+pub mod fetch;
+pub mod github;
+pub mod lsp;
+pub mod marketplace;
+pub mod media;
+pub mod read_ext;
+pub mod security_scan;
 pub mod skills;
+pub mod ssh;
 pub mod tool_meta;
+pub mod web_search;
 
 pub use cancel::CancelToken;
 pub use tool_meta::agent_tool_meta;
@@ -42,15 +57,26 @@ impl std::fmt::Debug for ToolContext {
             .field("cancel", &self.cancel)
             .field("ask", &self.ask.is_some())
             .field("uri_bridge", &self.uri_bridge.is_some())
+            .field(
+                "scan_cache",
+                &self.scan_cache.lock().map(|c| c.len()).unwrap_or(0),
+            )
             .finish()
     }
 }
+
+/// Cache hasil pemindaian berkas: kunci → (waktu, hasil).
+pub type ScanCache = Arc<Mutex<HashMap<String, (Instant, Vec<String>)>>>;
 
 /// Konteks eksekusi satu tool.
 #[derive(Clone)]
 pub struct ToolContext {
     /// Direktori kerja sesi; semua path relatif dihitung dari sini.
     pub cwd: PathBuf,
+    /// Root tambahan untuk `glob`/`grep` (`/add-dir`); elemen pertama = cwd.
+    pub roots: Vec<PathBuf>,
+    /// Cache hasil `glob` dengan TTL 5 dtk (`fs-scan-cache`).
+    pub scan_cache: ScanCache,
     /// Cap byte untuk output tool.
     pub output_cap: usize,
     /// Apakah sesi punya antarmuka untuk bertanya ke pengguna.
@@ -92,6 +118,10 @@ pub struct AskRequest {
     pub question: String,
     /// Kanal jawaban; kirim teks jawaban, atau drop untuk membatalkan.
     pub reply: oneshot::Sender<String>,
+    /// Opsi pilihan (kosong = teks bebas). Indeks 0-based.
+    pub options: Vec<String>,
+    /// Indeks opsi yang disarankan.
+    pub recommended: Option<u32>,
 }
 
 /// Batas waktu menunggu jawaban pengguna.
@@ -100,8 +130,11 @@ pub const ASK_TIMEOUT_SECS: u64 = 600;
 impl ToolContext {
     /// Konteks dengan nilai default RENCANA.md §3.4.
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
+        let cwd = cwd.into();
         Self {
-            cwd: cwd.into(),
+            roots: vec![cwd.clone()],
+            scan_cache: Arc::new(Mutex::new(HashMap::new())),
+            cwd,
             output_cap: 65_536,
             interactive: false,
             bash_timeout: Duration::from_secs(120),
@@ -147,6 +180,15 @@ impl ToolRegistry {
         let todos = Arc::new(Mutex::new(Vec::new()));
         let tools: Vec<Arc<dyn Tool>> = vec![
             Arc::new(ReadTool),
+            Arc::new(fetch::FetchTool),
+            Arc::new(web_search::WebSearchTool),
+            Arc::new(github::GithubTool),
+            Arc::new(security_scan::SecurityScanTool),
+            Arc::new(eval::EvalTool),
+            Arc::new(browser::BrowserTool),
+            Arc::new(ast_tools::AstGrepTool),
+            Arc::new(ast_tools::AstEditTool),
+            Arc::new(ast_tools::HashlineEditTool),
             Arc::new(WriteTool),
             Arc::new(EditTool),
             Arc::new(GlobTool),
@@ -335,6 +377,26 @@ impl Tool for ReadTool {
             .get("path")
             .and_then(Value::as_str)
             .ok_or_else(|| tool_error("argumen path wajib"))?;
+        // PR/issue GitHub dibaca lewat satu antarmuka `read`.
+        if raw.starts_with("pr://") || raw.starts_with("issue://") {
+            return Ok(match github::baca_uri(raw).await {
+                Ok(teks) => ToolOutput::ok(teks),
+                Err(pesan) => ToolOutput::err(pesan),
+            });
+        }
+        // URL http(s) memakai tool fetch; skema lain tetap milik host/RPC v2.
+        if raw.starts_with("http://") || raw.starts_with("https://") {
+            let batas = args
+                .get("max_bytes")
+                .and_then(Value::as_u64)
+                .map(|n| n as usize)
+                .unwrap_or(ctx.output_cap)
+                .min(ctx.output_cap);
+            return Ok(match fetch::ambil(raw, batas).await {
+                Ok((tipe, isi)) => ToolOutput::ok(format!("[{tipe}]\n{isi}")),
+                Err(pesan) => ToolOutput::err(pesan),
+            });
+        }
         // URL skema host (mis. db://users/42) dipantulkan ke host (RPC v2).
         if let Some(bridge) = &ctx.uri_bridge
             && bridge.owns(raw)
@@ -346,13 +408,20 @@ impl Tool for ReadTool {
             });
         }
         let path = resolve_in_cwd(&ctx.cwd, raw)?;
+        // Berkas non-teks diringkas (SQLite/arsip/PDF/biner) sebelum cek NUL.
+        if let Some(ringkasan) = read_ext::ringkas(&path) {
+            return Ok(match ringkasan {
+                Ok(teks) => ToolOutput::ok(teks),
+                Err(pesan) => ToolOutput::err(pesan),
+            });
+        }
         let bytes = std::fs::read(&path)
             .map_err(|e| tool_error(format!("gagal membaca {}: {e}", path.display())))?;
         if bytes.iter().take(8_192).any(|byte| *byte == 0) {
-            return Ok(ToolOutput::err(format!(
-                "{} tampak biner (mengandung byte NUL); tool read hanya untuk berkas teks",
-                path.display()
-            )));
+            return Ok(ToolOutput::ok(
+                read_ext::biner(&path)
+                    .unwrap_or_else(|_| format!("{} tampak biner", path.display())),
+            ));
         }
         let text = String::from_utf8_lossy(&bytes);
         let offset = args
@@ -561,27 +630,43 @@ impl Tool for GlobTool {
         let matcher = globset::Glob::new(pattern)
             .map_err(|e| tool_error(format!("pola tidak valid: {e}")))?
             .compile_matcher();
-        let mut found = Vec::new();
-        for entry in walkdir::WalkDir::new(&ctx.cwd)
-            .max_depth(12)
-            .into_iter()
-            .flatten()
+        let kunci_cache = format!("glob:{:?}:{pattern}", ctx.roots);
+        if let Ok(cache) = ctx.scan_cache.lock()
+            && let Some((waktu, tersimpan)) = cache.get(&kunci_cache)
+            && waktu.elapsed() < Duration::from_secs(5)
         {
-            if !entry.file_type().is_file() {
+            return Ok(ToolOutput::ok(tersimpan.join("\n")));
+        }
+        let mut found = Vec::new();
+        // Multi-root: tiap root dicari terpisah agar path relatif tetap pendek.
+        for root in ctx.roots.iter().chain(std::iter::once(&ctx.cwd)) {
+            if !root.is_dir() {
                 continue;
             }
-            let Ok(relative) = entry.path().strip_prefix(&ctx.cwd) else {
-                continue;
-            };
-            let display = relative.to_string_lossy().replace('\\', "/");
-            if matcher.is_match(&display) {
-                found.push(display);
-                if found.len() >= 200 {
-                    break;
+            for entry in walkdir::WalkDir::new(root)
+                .max_depth(12)
+                .into_iter()
+                .flatten()
+            {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let Ok(relative) = entry.path().strip_prefix(root) else {
+                    continue;
+                };
+                let display = relative.to_string_lossy().replace('\\', "/");
+                if matcher.is_match(&display) {
+                    found.push(display);
+                    if found.len() >= 200 {
+                        break;
+                    }
                 }
             }
         }
         found.sort();
+        if let Ok(mut cache) = ctx.scan_cache.lock() {
+            cache.insert(kunci_cache, (Instant::now(), found.clone()));
+        }
         Ok(ToolOutput::ok(found.join("\n")))
     }
 }
@@ -620,44 +705,64 @@ impl Tool for GrepTool {
             .ok_or_else(|| tool_error("argumen pattern wajib"))?;
         let regex = regex::Regex::new(pattern)
             .map_err(|e| tool_error(format!("regex tidak valid: {e}")))?;
-        let root = match args.get("path").and_then(Value::as_str) {
-            Some(sub) => resolve_in_cwd(&ctx.cwd, sub)?,
-            None => ctx.cwd.clone(),
+        let root_arg = args.get("path").and_then(Value::as_str);
+        let roots: Vec<PathBuf> = match root_arg {
+            Some(sub) => vec![resolve_in_cwd(&ctx.cwd, sub)?],
+            None => ctx.roots.clone(),
         };
         let max_results = args
             .get("max_results")
             .and_then(Value::as_u64)
             .map(|value| value.clamp(1, 1_000) as usize)
             .unwrap_or(200);
-        let mut hits = Vec::new();
-        'outer: for entry in walkdir::WalkDir::new(&root)
-            .max_depth(12)
-            .into_iter()
-            .flatten()
+        let kunci_cache = format!(
+            "grep:{:?}:{pattern}:{max_results}",
+            roots
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+        );
+        if let Ok(cache) = ctx.scan_cache.lock()
+            && let Some((waktu, tersimpan)) = cache.get(&kunci_cache)
+            && waktu.elapsed() < Duration::from_secs(5)
         {
-            if !entry.file_type().is_file() {
+            let (content, truncated) = truncate_bytes(&tersimpan.join("\n"), ctx.output_cap);
+            return Ok(ToolOutput::ok(content).truncated(truncated));
+        }
+        let mut hits = Vec::new();
+        'outer: for root in roots {
+            if !root.is_dir() {
                 continue;
             }
-            let Ok(bytes) = std::fs::read(entry.path()) else {
-                continue;
-            };
-            if bytes.len() > 1_048_576 || bytes.contains(&0) {
-                continue;
-            }
-            let text = String::from_utf8_lossy(&bytes);
-            let Ok(relative) = entry.path().strip_prefix(&ctx.cwd) else {
-                continue;
-            };
-            for (index, line) in text.lines().enumerate() {
-                if regex.is_match(line) {
-                    hits.push(format!(
-                        "{}:{}:{}",
-                        relative.display(),
-                        index + 1,
-                        line.trim()
-                    ));
-                    if hits.len() >= max_results {
-                        break 'outer;
+            for entry in walkdir::WalkDir::new(&root)
+                .max_depth(12)
+                .into_iter()
+                .flatten()
+            {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let Ok(bytes) = std::fs::read(entry.path()) else {
+                    continue;
+                };
+                if bytes.len() > 1_048_576 || bytes.contains(&0) {
+                    continue;
+                }
+                let text = String::from_utf8_lossy(&bytes);
+                let Ok(relative) = entry.path().strip_prefix(&root) else {
+                    continue;
+                };
+                for (index, line) in text.lines().enumerate() {
+                    if regex.is_match(line) {
+                        hits.push(format!(
+                            "{}:{}:{}",
+                            relative.display(),
+                            index + 1,
+                            line.trim()
+                        ));
+                        if hits.len() >= max_results {
+                            break 'outer;
+                        }
                     }
                 }
             }
@@ -666,6 +771,9 @@ impl Tool for GrepTool {
             hits.push(format!(
                 "[dipotong pada {max_results} hasil; persempit pola atau path]"
             ));
+        }
+        if let Ok(mut cache) = ctx.scan_cache.lock() {
+            cache.insert(kunci_cache, (Instant::now(), hits.clone()));
         }
         let (content, truncated) = truncate_bytes(&hits.join("\n"), ctx.output_cap);
         Ok(ToolOutput::ok(content).truncated(truncated))
@@ -975,7 +1083,11 @@ impl Tool for AskTool {
             description: "Mengajukan pertanyaan ke pengguna pada sesi interaktif.".into(),
             parameters: json!({
                 "type": "object",
-                "properties": { "question": { "type": "string" } },
+                "properties": {
+                    "question": { "type": "string" },
+                    "options": { "type": "array", "items": { "type": "string" } },
+                    "recommended": { "type": "integer", "minimum": 0 }
+                },
                 "required": ["question"]
             }),
             concurrency: tui_wire::Concurrency::Shared,
@@ -1000,6 +1112,21 @@ impl Tool for AskTool {
             .send(AskRequest {
                 question: question.to_string(),
                 reply,
+                options: args
+                    .get("options")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                recommended: args
+                    .get("recommended")
+                    .and_then(Value::as_u64)
+                    .and_then(|n| u32::try_from(n).ok()),
             })
             .is_err()
         {
@@ -1304,15 +1431,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_menolak_berkas_biner() {
+    async fn read_menringkas_berkas_biner() {
         let dir = temp_dir("read-biner");
         fs::write(dir.join("blob.bin"), [0u8, 159, 146, 150]).unwrap();
         let out = ReadTool
             .execute(&json!({"path": "blob.bin"}), &ToolContext::new(&dir))
             .await
             .unwrap();
-        assert!(out.is_error);
-        assert!(out.content.contains("biner"));
+        assert!(!out.is_error, "{}", out.content);
+        assert!(out.content.contains("berkas biner"), "{}", out.content);
     }
 
     #[tokio::test]
@@ -1857,12 +1984,151 @@ mod tests {
     }
 
     #[test]
-    fn registry_v1_memuat_delapan_tool() {
+    fn registry_v1_memuat_tujuh_belas_tool() {
         let registry = ToolRegistry::v1();
         let names = registry.names();
-        assert_eq!(names.len(), 8);
+        assert_eq!(names.len(), 17);
         assert!(names.contains(&"bash".to_string()));
         assert!(names.contains(&"edit".to_string()));
         assert!(registry.get("tidak-ada").is_none());
+    }
+}
+
+#[cfg(test)]
+mod multiroot_tests {
+    #![allow(clippy::unwrap_used, clippy::panic)]
+
+    use super::*;
+
+    fn dua_root(nama: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let basis = std::env::temp_dir().join(format!(
+            "maicli-multiroot-{nama}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let a = basis.join("a");
+        let b = basis.join("b");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        std::fs::write(a.join("satu.txt"), "kunci RAHASIA_A\n").unwrap();
+        std::fs::write(b.join("dua.txt"), "kunci RAHASIA_B\n").unwrap();
+        (a, b)
+    }
+
+    #[tokio::test]
+    async fn glob_dan_grep_mencari_semua_root() {
+        let (a, b) = dua_root("cari");
+        let mut ctx = ToolContext::new(&a);
+        ctx.roots.push(b.clone());
+        let glob = GlobTool
+            .execute(&json!({"pattern": "*.txt"}), &ctx)
+            .await
+            .unwrap();
+        assert!(glob.content.contains("satu.txt"), "{}", glob.content);
+        assert!(glob.content.contains("dua.txt"), "{}", glob.content);
+        let grep = GrepTool
+            .execute(&json!({"pattern": "RAHASIA"}), &ctx)
+            .await
+            .unwrap();
+        assert!(grep.content.contains("RAHASIA_A"), "{}", grep.content);
+        assert!(grep.content.contains("RAHASIA_B"), "{}", grep.content);
+        let parent = a.parent().unwrap().to_path_buf();
+        std::fs::remove_dir_all(parent).ok();
+    }
+    #[tokio::test]
+    async fn read_tool_ringkas_arsip() {
+        let root = std::env::temp_dir().join(format!(
+            "maicli-readzip-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut isi = vec![0x50, 0x4b, 0x03, 0x04];
+        isi.extend_from_slice(&20u16.to_le_bytes());
+        isi.extend_from_slice(&[0u8; 12]);
+        isi.extend_from_slice(&3u32.to_le_bytes());
+        isi.extend_from_slice(&3u32.to_le_bytes());
+        isi.extend_from_slice(&5u16.to_le_bytes());
+        isi.extend_from_slice(&0u16.to_le_bytes());
+        isi.extend_from_slice(b"a.txt");
+        isi.extend_from_slice(b"hai");
+        std::fs::write(root.join("a.zip"), isi).unwrap();
+        let ctx = ToolContext::new(&root);
+        let out = ReadTool
+            .execute(&json!({"path":"a.zip"}), &ctx)
+            .await
+            .expect("read jalan");
+        assert!(!out.is_error, "{}", out.content);
+        assert!(out.content.contains("a.txt"), "{}", out.content);
+        std::fs::remove_dir_all(root).ok();
+    }
+    #[tokio::test]
+    async fn glob_menggunakan_cache_ttl() {
+        let root = std::env::temp_dir().join(format!(
+            "maicli-cache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), "a").unwrap();
+        let ctx = ToolContext::new(&root);
+        let pertama = GlobTool
+            .execute(&json!({"pattern":"*.txt"}), &ctx)
+            .await
+            .unwrap();
+        assert!(pertama.content.contains("a.txt"));
+        std::fs::write(root.join("b.txt"), "b").unwrap();
+        let kedua = GlobTool
+            .execute(&json!({"pattern":"*.txt"}), &ctx)
+            .await
+            .unwrap();
+        assert!(!kedua.content.contains("b.txt"), "{}", kedua.content);
+        // Simulasikan kedaluwarsa: hasil berikutnya harus melihat berkas baru.
+        if let Ok(mut cache) = ctx.scan_cache.lock() {
+            for entry in cache.values_mut() {
+                entry.0 = Instant::now() - Duration::from_secs(10);
+            }
+        }
+        let ketiga = GlobTool
+            .execute(&json!({"pattern":"*.txt"}), &ctx)
+            .await
+            .unwrap();
+        assert!(ketiga.content.contains("b.txt"), "{}", ketiga.content);
+        std::fs::remove_dir_all(root).ok();
+    }
+    #[tokio::test]
+    async fn grep_menggunakan_cache_ttl() {
+        let root = std::env::temp_dir().join(format!(
+            "maicli-grepcache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), "kunci RAHASIA_A\n").unwrap();
+        let ctx = ToolContext::new(&root);
+        let pertama = GrepTool
+            .execute(&json!({"pattern":"RAHASIA"}), &ctx)
+            .await
+            .unwrap();
+        assert!(pertama.content.contains("RAHASIA_A"));
+        std::fs::write(root.join("b.txt"), "kunci RAHASIA_B\n").unwrap();
+        let kedua = GrepTool
+            .execute(&json!({"pattern":"RAHASIA"}), &ctx)
+            .await
+            .unwrap();
+        assert!(!kedua.content.contains("RAHASIA_B"), "{}", kedua.content);
+        std::fs::remove_dir_all(root).ok();
     }
 }

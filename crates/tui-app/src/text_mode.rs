@@ -15,15 +15,12 @@ use tui_wire::{AgentEvent, Message, MxError, ProviderEvent};
 
 use crate::Boot;
 use crate::approvals::{StdioDecisionUi, build_approver};
+use crate::features::{FeatureAction, FeatureState};
 
 fn settings(boot: &Boot) -> TurnSettings {
     TurnSettings {
         model: boot.model.clone(),
-        system_prompt: {
-            let mut sp = TurnSettings::default().system_prompt;
-            sp.push_str(&tui_tools::skills::ringkas_daftar(&boot.skills));
-            sp
-        },
+        system_prompt: crate::features::base_system_prompt(boot, true),
         deadline: Some(std::time::Duration::from_secs(
             boot.limits.turn_deadline_secs,
         )),
@@ -69,6 +66,7 @@ fn build_session(
         events,
     );
     session.set_context_window(boot.limits.context_window_tokens);
+    crate::hooks::pasang(&mut session, &boot.config.hooks);
     session
 }
 
@@ -153,7 +151,7 @@ pub async fn run_once(mut boot: Boot, prompt: String) -> Result<(), MxError> {
     for note in &boot.mcp_notes {
         println!("[mcp] {note}");
     }
-    let (tx, rx, event_log_done) = crate::event_log::channel(boot.event_log.clone());
+    let (tx, rx, event_log_done) = crate::event_log::channel_with_recorder(boot.recorder.clone());
     // Penerus notifikasi: task berhenti sendiri setelah 3×2 dtk idle (tanpa deadlock).
     let notif_task = boot
         .notif_rx
@@ -352,7 +350,7 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
     if boot.approval.mode == tui_approval::ApprovalMode::Yolo {
         println!("{}", crate::banner::yolo_banner());
     }
-    let (tx, rx, event_log_done) = crate::event_log::channel(boot.event_log.clone());
+    let (tx, rx, event_log_done) = crate::event_log::channel_with_recorder(boot.recorder.clone());
     // Penerus notifikasi: idle-timeout mencegah deadlock printer.
     let notif_task = boot
         .notif_rx
@@ -365,9 +363,14 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
     let skills_ringkas = tui_tools::skills::ringkas_daftar(&boot.skills);
     let mut effort_aktif: Option<String> = None;
     let mut force_aktif = false;
+    let mut fitur = FeatureState::new(&boot);
+    // Daftar todo dipakai command /todo export/import/copy.
+    fitur.todo = Some(todo_arc.clone());
     let approver = approver_for(&boot)?;
     let (ask_tx, mut ask_rx) = unbounded_channel::<AskRequest>();
     let events_for_switch = tx.clone();
+    // Siaran guest relay diteruskan ke timeline mode ini.
+    fitur.events = Some(tx.clone());
     let approver_for_switch = approver.clone();
     let mut session = build_session(&boot, tx, registry, approver, Some(ask_tx.clone()));
     session.seed_usage(boot.resume_usage);
@@ -614,6 +617,36 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
                         }
                     }
                     ('c', _) => Ok(Vec::new()),
+                    ('s', Some(no)) => {
+                        let n: usize = no.parse().unwrap_or(0);
+                        if n >= 1 && n <= daftar.len() {
+                            daftar[n - 1] = format!("[mulai] {}", daftar[n - 1]);
+                            Ok(daftar)
+                        } else {
+                            Err(format!("nomor {no} tidak ada di daftar ({})", daftar.len()))
+                        }
+                    }
+                    ('x', Some(no)) => {
+                        let n: usize = no.parse().unwrap_or(0);
+                        if n >= 1 && n <= daftar.len() {
+                            daftar[n - 1] = format!("[dibuang] {}", daftar[n - 1]);
+                            Ok(daftar)
+                        } else {
+                            Err(format!("nomor {no} tidak ada di daftar ({})", daftar.len()))
+                        }
+                    }
+                    ('p', Some(isi)) => match isi.split_once(char::is_whitespace) {
+                        Some((no, teks)) => {
+                            let n: usize = no.parse().unwrap_or(0);
+                            if n >= 1 && n <= daftar.len() {
+                                daftar[n - 1] = format!("{} {}", daftar[n - 1], teks.trim());
+                                Ok(daftar)
+                            } else {
+                                Err(format!("nomor {no} tidak ada di daftar ({})", daftar.len()))
+                            }
+                        }
+                        None => Err("pakai /todo append <nomor> <teks>".to_string()),
+                    },
                     _ => Err("subcommand todo tidak dikenal".to_string()),
                 };
                 match hasil {
@@ -850,6 +883,47 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
                 }
                 continue;
             }
+            CommandResult::Feature { name, argument } => {
+                match crate::features::handle(
+                    &boot,
+                    &mut session,
+                    &mut store,
+                    &mut fitur,
+                    &name,
+                    argument.as_deref(),
+                )
+                .await
+                {
+                    FeatureAction::Lines(lines) => {
+                        for line in lines {
+                            println!("{line}");
+                        }
+                    }
+                    FeatureAction::Fresh => {
+                        let dir = boot.sessions_dir.clone();
+                        let cwd = boot.cwd.display().to_string();
+                        match crate::session_open::create_new(dir, cwd).await {
+                            Ok(new_store) => {
+                                let path = new_store.path().display().to_string();
+                                session = build_session(
+                                    &boot,
+                                    events_for_switch.clone(),
+                                    boot.tool_registry(),
+                                    approver_for_switch.clone(),
+                                    Some(ask_tx.clone()),
+                                );
+                                session.set_context_window(boot.limits.context_window_tokens);
+                                store = Some(new_store);
+                                persisted_usage = tui_wire::Usage::default();
+                                approver_for_switch.forget_grants();
+                                println!("sesi baru (fresh): {path} — grant dihapus");
+                            }
+                            Err(err) => println!("{}: {}", err.code, err.message),
+                        }
+                    }
+                }
+                continue;
+            }
             CommandResult::Unknown(message) => {
                 println!("{message}");
                 continue;
@@ -876,6 +950,9 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
             Ok(outcome) => println!("\n[{} turn, {:?}]", outcome.turns, outcome.stop_reason),
             Err(err) => println!("\n{}: {}", err.code, err.message),
         }
+        if let Some(text) = crate::features::advisor_review(&boot, &fitur, &session).await {
+            println!("{text}");
+        }
         persist_compactions(&mut store, &mut session).await;
         crate::usage::persist_usage(&mut store, &session, &mut persisted_usage).await;
         if let Some(last) = session
@@ -888,6 +965,9 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
         }
     }
     drop(session);
+    // Clone pengirim event untuk switch sesi harus dilepas sebelum menunggu
+    // printer; kalau tidak, printer menunggu kanal yang tidak pernah tutup.
+    drop(events_for_switch);
     if let Some(tugas) = notif_task {
         tugas.abort();
     }

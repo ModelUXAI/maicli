@@ -38,7 +38,26 @@ Dependensi tanpa alasan = kartu tidak DONE (`AGENTS.md` §3).
 - Dua versi `base64`/`syn`/`windows-sys` di pohon berasal dari `reqwest` dan `ratatui` (warning
   `cargo deny`, bukan kegagalan).
 - Crate `pi-*` dari omp **belum** dipakai; bila dipakai, butuh Rust nightly dan keputusan V-06 baru.
-| `kdl = "6"` (tui-katalog) | parser KDL v2 untuk kompilator katalog omp (F-06) | 2026-11-18 |
+| `kdl = "~6.5"` (tui-katalog) | parser KDL v2 untuk kompilator katalog omp (F-06); dipin <6.6 agar MSRV 1.89 tetap valid | 2026-11-18 / pin 2026-11-21 |
 - tui-tools: **serde** (2026-11-20) — deserialisasi manifest extension yang ketat (deny_unknown_fields).
 - tui-app: **tokio-tungstenite** (2026-11-20) — server WebSocket untuk relay collab (room view/control; sesuai keputusan iqbal).
 - tui-app: **futures-util** (2026-11-20) — StreamExt untuk stream pesan WebSocket (pasangan tokio-tungstenite).
+- **`rusqlite` 0.41 (bundled)** (2026-11-21) — backend memori SQLite (`tui-memory`); versi 0.41 memuat SQLite 3.54 yang menutup RUSTSEC-2026-0459 (MSRV workspace naik ke 1.89).
+- **`sha2` 0.10 + `base64`** (2026-11-21) — PKCE S256 untuk OAuth MCP (`tui-mcp::oauth`); base64 sudah ada, sha2 baru.
+- **`arboard` 3.7** (2026-11-21) — clipboard lintas platform untuk `/copy` (tui-app).
+- **`enigo` 0.6 + `x11rb` 0.13** (2026-11-21) — input desktop (mouse/keyboard) dan screenshot X11 untuk tool `computer`; di Windows/macOS screenshot memakai **`xcap` 0.9** (target-specific).
+- **`image` 0.25** (2026-11-21) — encode PNG screenshot.
+- **`reqwest` di tui-app** (2026-11-21) — `/marketplace search` mengambil indeks HTTPS (timeout 20 dtk, cap 1 MiB).
+- **`reqwest` di tui-tools** (2026-11-23) — tool `fetch`/`read` URL dengan rustls, timeout 20 dtk, cap ukuran.
+- **`tokio` fitur `net`** (2026-11-23) — server TCP loopback pada test `fetch` (tidak dipakai produksi).
+- **Sistem (Linux build)**: `libpipewire-0.3-dev` dibutuhkan hanya bila `xcap` ikut dikompilasi untuk target non-Linux; build Linux murni memakai `x11rb`.
+- **`rusqlite` di `tui-tools`** (2026-11-23) — ringkasan database SQLite pada tool `read` (read-only, bundled).
+
+- **`lopdf` 0.47 + `flate2` 1** (2026-11-23) — ekstraksi teks PDF pada `read` (MSRV 1.88/1.67).
+- **`tokio-tungstenite`/`futures-util` di `tui-tools`** (2026-11-23) — `Runtime.evaluate` lewat CDP WebSocket.
+
+- **`sha2` + `base64` di `tui-app`** (2026-11-23) — PKCE S256 pada broker OAuth `serve`.
+
+- **`sha2` di `tui-tools`** (2026-11-23) — hash anchor pada tool `hashline_edit`.
+
+- **`qrcode` 0.15 (fitur svg)** (2026-11-23) — QR link relay lokal pada halaman web.

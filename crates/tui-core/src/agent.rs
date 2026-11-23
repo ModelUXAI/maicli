@@ -48,6 +48,8 @@ pub struct TurnSettings {
     pub deadline: Option<Duration>,
     /// Tingkat penalaran (low/medium/high); dikirim ke gateway bila Some.
     pub effort: Option<String>,
+    /// Tier layanan gateway (`priority` untuk `/fast`); dikirim bila Some.
+    pub service_tier: Option<String>,
 }
 
 impl Default for TurnSettings {
@@ -58,6 +60,7 @@ impl Default for TurnSettings {
             max_tokens: None,
             deadline: Some(Duration::from_secs(900)),
             effort: None,
+            service_tier: None,
         }
     }
 }
@@ -91,6 +94,17 @@ pub struct CompactionReport {
     pub after_tokens: u64,
     /// Jumlah pesan yang digantikan ringkasan.
     pub summarized: usize,
+}
+
+/// Hasil satu `shake` manual: token sebelum/sesudah dan jumlah yang dipangkas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShakeReport {
+    /// Jumlah hasil tool yang isinya dipangkas.
+    pub pruned: usize,
+    /// Perkiraan token sebelum dipangkas.
+    pub before_tokens: u64,
+    /// Perkiraan token sesudah dipangkas.
+    pub after_tokens: u64,
 }
 
 /// Batas bawah token output saat `max_tokens` menyesuaikan sisa window.
@@ -130,6 +144,10 @@ pub struct AgentSession {
     after_tool: Option<AfterToolHook>,
     /// Hook **sebelum** eksekusi tool (setelah approval lolos): observasi.
     before_tool: Option<BeforeToolHook>,
+    /// Pola larangan TTSR yang menghentikan stream.
+    ttsr_rules: Vec<String>,
+    /// Body permintaan model terakhir (untuk `/trace`).
+    last_request: Option<serde_json::Value>,
     status: crate::status::TurnStatus,
 }
 
@@ -167,6 +185,8 @@ impl AgentSession {
             context_sync: None,
             after_tool: None,
             before_tool: None,
+            ttsr_rules: Vec::new(),
+            last_request: None,
             status: crate::status::TurnStatus::Idle,
         }
     }
@@ -179,6 +199,16 @@ impl AgentSession {
     /// Tambahkan pesan ke konteks tanpa menjalankan turn (mis. resume).
     pub fn push_message(&mut self, message: Message) {
         self.messages.push(message);
+    }
+
+    /// Ganti root pencarian tool (dipakai `/add-dir`, `/dirs clear`).
+    pub fn set_roots(&mut self, roots: Vec<std::path::PathBuf>) {
+        self.tool_ctx.roots = roots;
+    }
+
+    /// Potong konteks menjadi `jumlah` pesan pertama (dipakai `/rewind`).
+    pub fn truncate_messages(&mut self, jumlah: usize) {
+        self.messages.truncate(jumlah);
     }
 
     /// Antrekan pesan steering: diproses pada batas iterasi berikutnya.
@@ -214,6 +244,73 @@ impl AgentSession {
     /// Set tingkat penalaran (`low`/`medium`/`high`); `None` = default gateway.
     pub fn set_effort(&mut self, effort: Option<String>) {
         self.settings.effort = effort;
+    }
+
+    /// Set tier layanan gateway (`priority` = `/fast`); `None` = default.
+    pub fn set_service_tier(&mut self, tier: Option<String>) {
+        self.settings.service_tier = tier;
+    }
+
+    /// Tier layanan aktif.
+    pub fn service_tier(&self) -> Option<&str> {
+        self.settings.service_tier.as_deref()
+    }
+
+    /// Ganti system prompt (dipakai `/skillful` dan injeksi memori).
+    pub fn set_system_prompt(&mut self, prompt: impl Into<String>) {
+        self.settings.system_prompt = prompt.into();
+    }
+
+    /// Panjang system prompt aktif (untuk `/local` dan `/debug`).
+    pub fn system_prompt_len(&self) -> usize {
+        self.settings.system_prompt.chars().count()
+    }
+
+    /// Body permintaan model terakhir (untuk `/trace`).
+    pub fn last_request(&self) -> Option<&Value> {
+        self.last_request.as_ref()
+    }
+
+    /// Pangkas isi hasil tool lama; mengembalikan jumlah yang dipangkas.
+    pub fn apply_elide(&mut self, keep_last: usize) -> usize {
+        prune_tool_results(&mut self.messages, keep_last)
+    }
+
+    /// Terapkan `shake` (prune hasil tool sampai target token).
+    pub fn apply_shake(&mut self, target_tokens: u64, keep_last: usize) -> Option<ShakeReport> {
+        let plan = plan_shake(&self.messages, target_tokens, keep_last)?;
+        self.messages = plan.messages.clone();
+        Some(ShakeReport {
+            pruned: plan.pruned,
+            before_tokens: plan.before_tokens,
+            after_tokens: plan.after_tokens,
+        })
+    }
+
+    /// Buang blok penalaran dari konteks; mengembalikan jumlah blok.
+    pub fn apply_strip_thinking(&mut self) -> usize {
+        tui_context::strip_thinking(&mut self.messages)
+    }
+
+    /// Snapshot state sesi untuk `/debug` (tanpa kredensial).
+    pub fn debug_snapshot(&self) -> Value {
+        serde_json::json!({
+            "model": self.settings.model,
+            "status": self.status.label(),
+            "effort": self.settings.effort,
+            "service_tier": self.settings.service_tier,
+            "messages": self.messages.len(),
+            "estimated_tokens": self.estimated_tokens(),
+            "context_usable_tokens": self.budget.usable(),
+            "usage": self.usage,
+            "paused": self.is_paused(),
+            "busy": self.is_busy(),
+            "steering": self.steering.len(),
+            "follow_ups": self.follow_ups.len(),
+            "tools": self.tools.names(),
+            "system_prompt_chars": self.system_prompt_len(),
+            "last_request": self.last_request,
+        })
     }
 
     /// Ganti approver (dipakai `/force`: yolo satu turn lalu pulih).
@@ -364,6 +461,11 @@ impl AgentSession {
         self.after_tool = Some(hook);
     }
 
+    /// Pasang pola larangan TTSR; stream berhenti bila pola muncul di delta.
+    pub fn set_ttsr_rules(&mut self, rules: Vec<String>) {
+        self.ttsr_rules = rules;
+    }
+
     /// Pasang hook **sebelum** eksekusi tool (setelah approval lolos):
     /// (nama tool, cuplikan argumen). Observasi, tidak mengubah eksekusi.
     pub fn set_before_tool(&mut self, hook: BeforeToolHook) {
@@ -398,7 +500,9 @@ impl AgentSession {
             tools: Vec::new(),
             max_tokens: Some(2_048),
             reasoning_effort: None,
+            service_tier: None,
         };
+        self.last_request = Some(tui_provider::request_body(&request));
         let mut receiver = match self.provider.stream_chat(request).await {
             Ok(receiver) => receiver,
             Err(err) => {
@@ -513,6 +617,7 @@ impl AgentSession {
         });
         let _ = self.events.send(AgentEvent::AgentStart);
 
+        let mut ttsr_retries = 0u32;
         let stop_reason = loop {
             turns += 1;
             let _ = self.events.send(AgentEvent::TurnStart { index: turns });
@@ -540,12 +645,11 @@ impl AgentSession {
                     });
                     break StopReason::Aborted;
                 }
-                if let Some(hook) = &self.context_sync {
-                    if let Some(replaced) = hook(&self.messages) {
-                        if !replaced.is_empty() {
-                            self.messages = replaced;
-                        }
-                    }
+                if let Some(hook) = &self.context_sync
+                    && let Some(replaced) = hook(&self.messages)
+                    && !replaced.is_empty()
+                {
+                    self.messages = replaced;
                 }
                 let used = self.estimated_tokens().max(self.usage.context_tokens());
                 if self.auto_compact
@@ -560,15 +664,16 @@ impl AgentSession {
                         self.compact().await;
                     }
                 }
-                if let Some(gate) = &self.before_model_call {
-                    if let Some(reason) = gate() {
-                        let _ = self.events.send(AgentEvent::Notice {
-                            text: format!("turn dihentikan: {reason}"),
-                        });
-                        break StopReason::Aborted;
-                    }
+                if let Some(gate) = &self.before_model_call
+                    && let Some(reason) = gate()
+                {
+                    let _ = self.events.send(AgentEvent::Notice {
+                        text: format!("turn dihentikan: {reason}"),
+                    });
+                    break StopReason::Aborted;
                 }
                 let request = self.build_request();
+                self.last_request = Some(tui_provider::request_body(&request));
                 let _ = self.events.send(AgentEvent::MessageStart);
                 let mut receiver = match self.provider.stream_chat(request).await {
                     Ok(receiver) => receiver,
@@ -582,10 +687,28 @@ impl AgentSession {
                 let mut assistant: Option<AssistantMessage> = None;
                 let cancel = self.cancel.clone();
                 let mut interrupted = false;
+                let mut ttsr_hit: Option<String> = None;
+                let mut teks_ttsr = String::new();
                 loop {
                     tokio::select! {
                         maybe = receiver.recv() => {
                             let Some(event) = maybe else { break };
+                            if let ProviderEvent::TextDelta { text } = &event {
+                                teks_ttsr.push_str(text);
+                                let rendah = teks_ttsr.to_ascii_lowercase();
+                                if let Some(pola) = self
+                                    .ttsr_rules
+                                    .iter()
+                                    .find(|p| !p.trim().is_empty() && rendah.contains(&p.to_ascii_lowercase()))
+                                {
+                                    let _ = self.events.send(AgentEvent::Notice {
+                                        text: format!("TTSR memicu larangan: {pola}"),
+                                    });
+                                    ttsr_hit = Some(pola.clone());
+                                    interrupted = true;
+                                    break;
+                                }
+                            }
                             let _ = self.events.send(AgentEvent::MessageUpdate(event.clone()));
                             match event {
                                 ProviderEvent::Done { message } => {
@@ -607,6 +730,27 @@ impl AgentSession {
                             break;
                         }
                     }
+                }
+                if let Some(pola) = ttsr_hit {
+                    // TTSR: tutup pasangan event, suntik aturan, lalu retry sekali.
+                    let synthetic = AssistantMessage {
+                        content: Vec::new(),
+                        stop_reason: StopReason::Aborted,
+                        usage: Usage::default(),
+                        error: None,
+                    };
+                    let _ = self.events.send(AgentEvent::MessageEnd {
+                        message: synthetic.clone(),
+                    });
+                    self.messages.push(Message::assistant(&synthetic));
+                    self.messages.push(Message::system(format!(
+                        "TTSR memicu larangan '{pola}'. Jangan ulangi; lanjutkan tanpa pola itu."
+                    )));
+                    if ttsr_retries < 1 {
+                        ttsr_retries += 1;
+                        continue;
+                    }
+                    break StopReason::Aborted;
                 }
                 if interrupted {
                     // Stream diputus: tetapkan `message_end` sintetis agar event
@@ -945,6 +1089,7 @@ impl AgentSession {
             tools: self.tools.definitions(),
             max_tokens: self.fit_output_tokens(),
             reasoning_effort: self.settings.effort.clone(),
+            service_tier: self.settings.service_tier.clone(),
         }
     }
 }
@@ -2383,6 +2528,34 @@ mod tests {
                 cached_tokens: 3
             }
         );
+    }
+
+    #[tokio::test]
+    async fn ttsr_retry_setelah_injeksi_aturan() {
+        let pertama = vec![ProviderEvent::TextDelta {
+            text: "rm -rf /".into(),
+        }];
+        let kedua = vec![done(AssistantMessage::text("aman", StopReason::Stop))];
+        let (mut session, provider, _calls, _rx) = harness(vec![pertama, kedua], Decision::Once);
+        session.set_ttsr_rules(vec!["rm -rf".into()]);
+        let outcome = session.run_turn(Some("hai".into())).await.unwrap();
+        assert_eq!(outcome.stop_reason, StopReason::Stop);
+        assert_eq!(provider.request_count(), 2);
+        assert!(session.messages().iter().any(|m| matches!(m,
+            Message::System { content } if content.contains("TTSR memicu"))));
+    }
+
+    #[tokio::test]
+    async fn ttsr_berhenti_bila_retry_juga_gagal() {
+        let delta = ProviderEvent::TextDelta {
+            text: "rm -rf /".into(),
+        };
+        let (mut session, provider, _calls, _rx) =
+            harness(vec![vec![delta], vec![]], Decision::Once);
+        session.set_ttsr_rules(vec!["rm -rf".into()]);
+        let outcome = session.run_turn(Some("hai".into())).await.unwrap();
+        assert_eq!(outcome.stop_reason, StopReason::Error);
+        assert_eq!(provider.request_count(), 2);
     }
 
     #[tokio::test]

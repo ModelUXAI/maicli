@@ -21,6 +21,7 @@
 )]
 
 pub mod http;
+pub mod oauth;
 pub mod sse;
 
 pub use http::resolve_header;
@@ -43,6 +44,15 @@ pub const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 /// Batas baris jawaban server MCP (mencegah skrip rusak menghabiskan memori).
 const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 
+/// Satu root yang diumumkan klien ke server MCP.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpRoot {
+    /// URI root, mis. `file:///home/u/kerja`.
+    pub uri: String,
+    /// Nama tampilan.
+    pub name: String,
+}
+
 /// Konfigurasi satu server MCP stdio.
 #[derive(Debug, Clone)]
 pub struct ServerSpec {
@@ -56,6 +66,8 @@ pub struct ServerSpec {
     pub env: Vec<(String, String)>,
     /// Batas waktu satu request MCP.
     pub timeout: Duration,
+    /// Root yang diumumkan lewat `roots/list`.
+    pub roots: Vec<McpRoot>,
 }
 
 impl ServerSpec {
@@ -67,7 +79,17 @@ impl ServerSpec {
             args: Vec::new(),
             env: Vec::new(),
             timeout: Duration::from_secs(30),
+            roots: Vec::new(),
         }
+    }
+
+    /// Tambah root yang diumumkan ke server.
+    pub fn root(mut self, uri: impl Into<String>, name: impl Into<String>) -> Self {
+        self.roots.push(McpRoot {
+            uri: uri.into(),
+            name: name.into(),
+        });
+        self
     }
 
     /// Tambah satu argumen.
@@ -203,6 +225,10 @@ pub struct McpClient {
     timeout: Duration,
     /// Penerima notifikasi server (progress/log); `None` = dibuang.
     notifications: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<McpNotification>>>>,
+    /// Root yang diumumkan ke server lewat `roots/list`.
+    roots: Vec<McpRoot>,
+    /// Waktu klien dibuat (untuk `ping`).
+    started_at: std::time::Instant,
 }
 
 /// Notifikasi dari server MCP (bukan balasan request).
@@ -278,6 +304,8 @@ impl McpClient {
             next_id: 1,
             timeout: spec.timeout,
             notifications: Arc::new(Mutex::new(None)),
+            roots: spec.roots.clone(),
+            started_at: std::time::Instant::now(),
         })
     }
 
@@ -406,28 +434,53 @@ impl McpClient {
             if let Some(metode_server) = pesan.get("method").and_then(Value::as_str) {
                 if let Some(id_server) = pesan.get("id").cloned() {
                     self.jawab_request_server(metode_server, id_server).await?;
-                } else if let Ok(guard) = self.notifications.try_lock() {
-                    if let Some(tx) = guard.as_ref() {
-                        let _ = tx.send(McpNotification {
-                            method: metode_server.to_string(),
-                            params: pesan.get("params").cloned().unwrap_or(Value::Null),
-                        });
-                    }
+                } else if let Ok(guard) = self.notifications.try_lock()
+                    && let Some(tx) = guard.as_ref()
+                {
+                    let _ = tx.send(McpNotification {
+                        method: metode_server.to_string(),
+                        params: pesan.get("params").cloned().unwrap_or(Value::Null),
+                    });
                 }
             }
         }
     }
+}
 
+/// Isi `result` untuk request `ping` dari server MCP.
+pub fn ping_result(server: &str, uptime: Duration, roots: usize) -> Value {
+    json!({
+        "server": server,
+        "protocolVersion": MCP_PROTOCOL_VERSION,
+        "uptimeSecs": uptime.as_secs(),
+        "roots": roots
+    })
+}
+
+/// Isi `result` untuk request `roots/list`.
+pub fn roots_result(roots: &[McpRoot]) -> Value {
+    let roots: Vec<Value> = roots
+        .iter()
+        .map(|root| json!({"uri": root.uri, "name": root.name}))
+        .collect();
+    json!({"roots": roots})
+}
+
+impl McpClient {
     async fn jawab_request_server(&mut self, method: &str, id: Value) -> Result<(), MxError> {
-        let jawaban = match method {
-            "ping" => json!({"jsonrpc": "2.0", "id": id, "result": {}}),
-            "roots/list" => json!({"jsonrpc": "2.0", "id": id, "result": {"roots": []}}),
-            lain => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {"code": -32601, "message": format!("method tidak didukung: {lain}")}
-            }),
+        let result = match method {
+            "ping" => ping_result(&self.name, self.started_at.elapsed(), self.roots.len()),
+            "roots/list" => roots_result(&self.roots),
+            lain => {
+                let jawaban = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": {"code": -32601, "message": format!("method tidak didukung: {lain}")}
+                });
+                return self.tulis(&jawaban).await;
+            }
         };
+        let jawaban = json!({"jsonrpc": "2.0", "id": id, "result": result});
         self.tulis(&jawaban).await
     }
 
@@ -799,6 +852,28 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("maicli-mcp-{tag}-{}-{n}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn ping_dan_roots_kaya() {
+        let ping = ping_result("server-x", Duration::from_secs(12), 2);
+        assert_eq!(ping["server"], "server-x");
+        assert_eq!(ping["protocolVersion"], MCP_PROTOCOL_VERSION);
+        assert_eq!(ping["uptimeSecs"], 12);
+        assert_eq!(ping["roots"], 2);
+        let roots = roots_result(&[
+            McpRoot {
+                uri: "file:///kerja".to_string(),
+                name: "kerja".to_string(),
+            },
+            McpRoot {
+                uri: "file:///data".to_string(),
+                name: "data".to_string(),
+            },
+        ]);
+        assert_eq!(roots["roots"].as_array().map(Vec::len), Some(2));
+        assert_eq!(roots["roots"][0]["uri"], "file:///kerja");
+        assert_eq!(roots["roots"][1]["name"], "data");
     }
 
     #[tokio::test]

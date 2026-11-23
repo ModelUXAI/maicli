@@ -1,7 +1,7 @@
 # MCP v1 (transport stdio) — `tui-mcp`
 
 Status: **DONE (crate stdio+HTTP + bridge + wiring)** — dikerjakan 2026-11-18 sebagai item P1
-`docs/platform-dan-integrasi.md` §7. Server MCP dikonfigurasi lewat `[mcp]` di
+dokumen roadmap internal (tidak dipublikasikan). Server MCP dikonfigurasi lewat `[mcp]` di
 `config.toml` (lihat `docs/config-v1.md`) dan terhubung otomatis saat boot.
 
 ## Scope v1

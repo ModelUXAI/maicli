@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-kdl = "6"
+kdl = "~6.5"
 globset.workspace = true
 
 [lints]
