@@ -4780,18 +4780,46 @@ provider "uji-cat2" {
             panic!("alamat server uji tidak diketahui");
         };
         std::thread::spawn(move || {
-            for body in bodies {
+            let mut indeks = 0usize;
+            // Path-aware: discovery `/models` dibalas JSON, bukan skrip SSE.
+            // Di Windows klien bisa melakukan discovery lebih dulu; mock lama
+            // mengira itu panggilan chat pertama sehingga tool call tidak pernah
+            // sampai ke UI (approval_timeout gagal).
+            for _ in 0..32 {
                 let Ok((mut stream, _)) = listener.accept() else {
                     return;
                 };
-                let mut buffer = [0u8; 8192];
+                let mut buffer = [0u8; 16384];
                 let _ = stream.read(&mut buffer);
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
+                let permintaan = String::from_utf8_lossy(&buffer);
+                let path = permintaan
+                    .lines()
+                    .next()
+                    .and_then(|baris| baris.split_whitespace().nth(1))
+                    .unwrap_or("/")
+                    .to_string();
+                let (jenis, isi) = if path.contains("models") {
+                    (
+                        "application/json",
+                        "{\"data\":[{\"id\":\"model-uji\"}]}".to_string(),
+                    )
+                } else {
+                    let hasil = if indeks < bodies.len() {
+                        let nilai = bodies[indeks].clone();
+                        indeks += 1;
+                        nilai
+                    } else {
+                        // Skrip habis: ulangi body terakhir agar koneksi tambahan
+                        // tidak menggantung klien.
+                        bodies.last().cloned().unwrap_or_default()
+                    };
+                    ("text/event-stream", hasil)
+                };
+                let respons = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: {jenis}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{isi}",
+                    isi.len()
                 );
-                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.write_all(respons.as_bytes());
             }
         });
         format!("http://{addr}/v1")

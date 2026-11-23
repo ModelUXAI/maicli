@@ -13,6 +13,13 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Mock SSE path-aware untuk CI Windows (2026-11-23)**: `crates/tui-app/src/tui_mode.rs`
+  `spawn_sse_script` kini membedakan `GET /models` (JSON) dari `chat/completions`
+  (skrip SSE) dan melayani hingga 32 koneksi. Sebelumnya discovery Windows
+  menghabiskan skrip pertama sehingga tool call tidak pernah sampai ke UI
+  (`approval_timeout_menolak_dan_tool_tidak_jalan` gagal). Setelah perbaikan ACL
+  di putaran sebelumnya, ini satu-satunya kegagalan `test (windows-latest)`.
+
 - **Perbaikan prasyarat rilis Windows (2026-11-23)**: `crates/tui-wire/src/secure_file.rs`
   mengganti `icacls /inheritance:r` (menyisakan 3 ACE SYSTEM/Administrators/user,
   `protected=False` di runner CI) dengan DACL baru via `Set-Acl`: tepat 1 ACE
