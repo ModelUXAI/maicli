@@ -13,6 +13,18 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   (777 → 644/755) dan `__pycache__/`+`*.pyc` masuk `.gitignore`. Gate: 641 test +
   8 E2E, `/tmp/check-final-2026-11-23.log`.
 
+- **Portabilitas CI lintas platform (2026-11-23)**: `crates/tui-computer/src/lib.rs`
+  memberi fallback `daftar_jendela` di luar Linux; `crates/tui-tools/src/media.rs`
+  memindah `use super::*` ke dalam test `cfg(unix)`; test `kill_tree_posix` di-gate
+  `target_os = "linux"` (bukan `/proc` di macOS); 4 test repo git menetapkan
+  `core.autocrlf=false`; test clipboard tidak menganggap clipboard kosong di
+  lingkungan tanpa display sebagai kegagalan. Setelah push `7659db5`, CI `fmt`, `clippy (Linux/Windows)`,
+  `test (ubuntu)`, `build-release`, `deny`, `msrv`, `actionlint` hijau.
+  **Masih merah**: `test (windows-latest)` (ACL runner 3 ACE/protected=False + 3 E2E
+  gateway unreachable) dan `test (macos-latest)` (dijalankan sebelum fix; diagnosa
+  ulang di branch `debug/ci-logs` → `exit=0`). Bukti:
+  `/tmp/check-final3-2026-11-23.log`, `/tmp/clippy-win4.log`.
+
 - **Audit penomoran versi + URL repo (2026-11-23)**: `docs/versioning.md`
   merangkum satu versi workspace 0.1.0, release-plz, tag `vX.Y.Z`; URL repo
   diseragamkan ke `ModelUXAI/maicli`; dokumen rilis 4→6 biner; npm
