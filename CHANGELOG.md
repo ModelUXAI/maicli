@@ -10,6 +10,8 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   panel aktivitas tool, dan footer hint meniru contoh omp. Shell Tauri 2
   (`gui/`) menjalankan `maicli --mode rpc` sebagai child process; frame JSONL
   diteruskan dua arah lewat command `rpc_send` + event `rpc-line`.
+- **Bundling GUI CI sukses lintas OS (2026-11-24)**: root cause ganda diperbaiki — `tauri build` dipanggil langsung dari folder `gui/` (bukan lewat `npm --prefix` yang mengubah cwd dan memicu panic `app_paths.rs:133`), dan `icons/icon.ico` terdaftar untuk bundler Windows; runner macOS diganti `macos-latest`. Run `45330035078`: job `gui` hijau di Ubuntu/Windows/macOS, job `release` sukses. Release v0.1.0 kini berisi 17 aset otomatis: `.exe`, `.msi`, `.deb`, `.AppImage`, `.dmg` (+ arsip CLI + sha256), tanpa unggah manual.
+
 - **Rilis GUI (2026-11-24)**: job `gui` di `release.yml` membangun `.exe` (NSIS/
   MSI) Windows, `.deb`/AppImage Linux, dan `.dmg` macOS (lewat runner CI).
   Amandemen RENCANA `A-2026-11-24` mencatat perubahan L-1/O-7/O-8.
