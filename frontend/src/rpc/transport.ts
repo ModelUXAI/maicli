@@ -1,53 +1,50 @@
 // Transport JSONL ke `maicli --mode rpc`.
 //
-// Di desktop, `gui/src/lib.rs` menjalankan child process dan meneruskan tiap
-// baris stdout sebagai event Tauri `rpc-line`; `rpc_send` menulis satu baris ke
-// stdin child. Di browser (dev) hanya FixtureTransport yang dipakai preview.
-
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+// Di desktop Electron, `desktop/main.js` menjalankan child process dan
+// meneruskan tiap baris stdout lewat IPC `rpc-line`; `maicliDesktop.send`
+// menulis satu baris ke stdin child. Di browser (dev/preview) tidak ada bridge,
+// sehingga OfflineTransport dipakai dan UI tetap jujur tanpa data rekaan.
 
 export interface RpcTransport {
   send(line: string): void;
   onLine(cb: (line: string) => void): () => void;
-  /** Opsional: lepaskan sumber daya (mis. listener event Tauri). */
+  /** Lepaskan sumber daya (listener IPC). */
   dispose?(): void;
 }
 
-function hasTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+/** Jembatan yang diekspos `desktop/preload.js` lewat contextBridge. */
+interface DesktopBridge {
+  send(line: string): Promise<void>;
+  onLine(callback: (line: string) => void): () => void;
 }
 
-/** Transport nyata lewat bridge Tauri. */
-export class TauriTransport implements RpcTransport {
-  private listeners = new Set<(line: string) => void>();
-  private unlisten: UnlistenFn | null = null;
-  private disposed = false;
+interface ElectronWindow extends Window {
+  maicliDesktop?: DesktopBridge;
+}
 
-  constructor() {
-    void listen<string>("rpc-line", (event) => {
-      if (typeof event.payload === "string") {
-        this.emitLine(event.payload);
-      }
-    }).then((off) => {
-      if (this.disposed) off();
-      else this.unlisten = off;
-    });
+function bridge(): DesktopBridge | null {
+  if (typeof window === "undefined") return null;
+  return (window as ElectronWindow).maicliDesktop ?? null;
+}
+
+/** Transport nyata lewat bridge Electron. */
+export class ElectronTransport implements RpcTransport {
+  private off: (() => void) | null = null;
+
+  constructor(private api: DesktopBridge) {
+    this.off = api.onLine((line) => this.listeners.forEach((cb) => cb(line)));
   }
 
-  private emitLine(line: string): void {
+  private listeners = new Set<(line: string) => void>();
+
+  private emitLocalError(message: string): void {
+    const line = JSON.stringify({ type: "error", code: "E_RPC", message });
     this.listeners.forEach((cb) => cb(line));
   }
 
-  private emitLocalError(message: string): void {
-    this.emitLine(
-      JSON.stringify({ type: "error", code: "E_RPC", message }),
-    );
-  }
-
   send(line: string): void {
-    void invoke("rpc_send", { line }).catch((err: unknown) => {
-      this.emitLocalError(String(err));
+    void this.api.send(line).catch((error: unknown) => {
+      this.emitLocalError(String(error));
     });
   }
 
@@ -59,14 +56,13 @@ export class TauriTransport implements RpcTransport {
   }
 
   dispose(): void {
-    this.disposed = true;
     this.listeners.clear();
-    this.unlisten?.();
-    this.unlisten = null;
+    this.off?.();
+    this.off = null;
   }
 }
 
-/** Transport yang tidak terhubung ke proses apa pun (lingkungan tanpa Tauri). */
+/** Transport tanpa bridge (browser biasa): tidak mengarang balasan. */
 export class OfflineTransport implements RpcTransport {
   private listeners = new Set<(line: string) => void>();
 
@@ -75,7 +71,7 @@ export class OfflineTransport implements RpcTransport {
       type: "error",
       code: "E_NO_BRIDGE",
       message:
-        "Bridge Tauri tidak tersedia di lingkungan ini; jalankan aplikasi desktop maicli.",
+        "Bridge desktop tidak tersedia di browser ini; jalankan aplikasi desktop maicli.",
     });
     this.listeners.forEach((cb) => cb(payload));
   }
@@ -89,5 +85,6 @@ export class OfflineTransport implements RpcTransport {
 }
 
 export function createTransport(): RpcTransport {
-  return hasTauri() ? new TauriTransport() : new OfflineTransport();
+  const api = bridge();
+  return api ? new ElectronTransport(api) : new OfflineTransport();
 }

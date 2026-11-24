@@ -16,7 +16,6 @@ members = [
     "crates/tui-core",
     "crates/tui-sdk",
     "crates/tui-app",
-    "gui",
 ]
 
 [workspace.package]

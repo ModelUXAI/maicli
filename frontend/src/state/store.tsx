@@ -450,7 +450,7 @@ export function useStore(): StoreValue {
 
 export interface AppStateProviderProps {
   children: ReactNode;
-  /** Klien siap pakai (dipakai preview/test); default dibuat dari transport Tauri. */
+  /** Klien siap pakai (dipakai preview/test); default dibuat dari transport desktop. */
   client?: RpcClient;
 }
 

@@ -1,4 +1,4 @@
-// Deteksi tinggi viewport sempit (mis. window minimum Tauri 860x600).
+// Deteksi tinggi viewport sempit (mis. window minimum desktop 860x600).
 // Dipakai untuk memadatkan HUD agar transkrip tetap punya ruang baca.
 
 import { useEffect, useState } from "react";

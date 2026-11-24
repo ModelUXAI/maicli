@@ -51,5 +51,5 @@
   tidak dikenali sebagai perubahan versi, sehingga versi harus di-bump manual
   sampai konvensi commit dipakai konsisten.
 - Semua marker versi mengikuti satu angka: `Cargo.toml`, `gui/Cargo.toml`,
-  `frontend/package.json`, `gui/tauri.conf.json`, `npm/modeluxai/package.json`,
+  `frontend/package.json`, `desktop/package.json`, `npm/modeluxai/package.json`,
   dan `sdk/typescript/package.json`.

@@ -1,6 +1,22 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.3.1] - 2026-11-24`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.0] - 2026-11-24`.
+
+## [0.4.0] - 2026-11-24
+
+### Changed
+- **Host desktop berganti Tauri 2 → Electron 45 + Node.js**: UI-nya tetap React 19
+  + TypeScript (`frontend/`) persis seperti sebelumnya; yang diganti hanya pembungkus
+  jendela dan jembatan IPC. `desktop/main.js` menjalankan `maicli --mode rpc`,
+  meneruskan frame JSONL lewat `ipcMain`, dan `desktop/preload.js` mengekspos
+  `maicliDesktop.send/onLine` lewat `contextBridge` (contextIsolation + sandbox aktif).
+  `src/rpc/transport.ts` kini memakai `ElectronTransport`, tanpa `@tauri-apps/*`.
+- **Removed**: crate `gui/` beserta dependensi Tauri di workspace/Cargo.lock; script
+  `tauri` dan `@tauri-apps/api`/`@tauri-apps/cli` di `frontend/package.json`.
+- **Changed**: workflow `release.yml` job `gui` kini membangun core CLI, frontend,
+  lalu installer Electron via `electron-builder` (NSIS/MSI, AppImage/deb, dmg/zip).
+  Marker versi mengikuti `desktop/package.json`.
+
 
 ## [0.3.1] - 2026-11-24
 

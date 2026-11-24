@@ -68,7 +68,7 @@ export function WelcomeView({ onQuickstart }: WelcomeViewProps) {
             </span>
           </div>
           <p className="mt-1 text-body-sm text-on-surface-variant">
-            Frontend Tauri 2 di atas inti Rust yang sama; semua status berasal dari frame RPC.
+            Frontend Electron + React di atas inti Rust yang sama; semua status berasal dari frame RPC.
           </p>
         </div>
 

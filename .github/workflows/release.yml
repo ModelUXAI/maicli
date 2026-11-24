@@ -188,51 +188,70 @@ jobs:
         include:
           - os: ubuntu-22.04
             arsip: maicli-gui-linux
+            target: x86_64-unknown-linux-gnu
           - os: windows-latest
             arsip: maicli-gui-windows
+            target: x86_64-pc-windows-msvc
           - os: macos-latest
             arsip: maicli-gui-macos
+            target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref_name }}
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      # 1) Bangun core CLI yang akan dibundel Electron.
+      - name: bangun core maicli
+        run: cargo build --release --locked -p tui-app --target ${{ matrix.target }}
+
+      # 2) Bangun frontend TypeScript → desktop/frontend-dist.
       - name: pasang dependensi frontend
         working-directory: frontend
         run: npm ci
-      - name: pasang dependensi sistem (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      # Tanpa flag --bundles: Tauri memilih target yang didukung OS-nya.
-      # Flag eksplisit pernah memicu panic di Linux dan ditolak di Windows.
-      - name: bangun GUI
-        working-directory: gui
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        # Panggil CLI Tauri langsung DARI folder gui/. Memakai
-        # `npm --prefix ../frontend run tauri` membuat npm menjalankan script
-        # dari folder frontend/, sehingga Tauri tidak menemukan tauri.conf.json
-        # dan panic di app_paths.rs:133.
+      - name: bangun frontend
+        working-directory: frontend
+        run: npm run build
+      - name: salin frontend ke host Electron
         shell: bash
         run: |
+          set -euo pipefail
+          rm -rf desktop/frontend-dist
+          mkdir -p desktop/frontend-dist
+          cp -R frontend/dist/. desktop/frontend-dist/
+
+      # 3) Letakkan biner core di desktop/bin, lalu kemas dengan electron-builder.
+      - name: siapkan biner core
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p desktop/bin
           if [ "$RUNNER_OS" = "Windows" ]; then
-            ../frontend/node_modules/.bin/tauri.cmd build
+            cp "target/${{ matrix.target }}/release/maicli.exe" desktop/bin/maicli.exe
           else
-            ../frontend/node_modules/.bin/tauri build
+            cp "target/${{ matrix.target }}/release/maicli" desktop/bin/maicli
           fi
+
+      - name: pasang dependensi Electron
+        working-directory: desktop
+        run: npm ci
+      - name: bangun installer Electron
+        working-directory: desktop
+        run: npm run dist
+
       - name: kumpulkan artefak GUI
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist-gui
-          find target/release/bundle -type f \
-            \( -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) \
+          find desktop/release -maxdepth 1 -type f \
+            \( -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.zip' \) \
             -exec cp {} dist-gui/ \;
           ls -la dist-gui
       - uses: actions/upload-artifact@v4

@@ -77,7 +77,7 @@ export class RpcClient {
   dispose(): void {
     this.disposed = true;
     this.off();
-    // Transport Tauri menyimpan `unlisten`; lepas juga agar tidak bocor.
+    // Transport Electron menyimpan unsubscribe IPC; lepas juga agar tidak bocor.
     this.transport.dispose?.();
     for (const [, pending] of this.pending) {
       pending.reject(new RpcError("E_DISPOSED", "klien RPC sudah ditutup"));
