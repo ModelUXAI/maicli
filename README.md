@@ -43,13 +43,23 @@ berkas dan eksekusi melewati approval gate yang bisa kamu atur.
 
 ## Instalasi
 
-A. Unduh dari halaman Releases repositori GitHub ini:
+**Satu paket — CLI + TUI menyatu** (model distribusi omp, tanpa Electron/Tauri):
+
+```bash
+npm install -g @modeluxai/cli
+maicli                       # satu perintah, langsung TUI terminal
+```
+
+Satu perintah `npm install -g` sudah mencakup biner platform yang dipilih otomatis
+melalui `optionalDependencies` (Linux x64/arm64, macOS x64/arm64, Windows x64/arm64).
+Tidak perlu installer GUI terpisah; tidak ada Chromium/webview.
+
+A. Atau unduh biner dari halaman Releases GitHub:
 
 ```bash
 # Linux x64 (pola: maicli-<platform>-vX.Y.Z.tar.gz)
-# verifikasi checksum dulu
-sha256sum -c maicli-linux-x64-v0.1.0.tar.gz.sha256
-tar -xzf maicli-linux-x64-v0.1.0.tar.gz
+sha256sum -c maicli-linux-x64-v0.4.3.tar.gz.sha256
+tar -xzf maicli-linux-x64-v0.4.3.tar.gz
 sudo mv maicli-linux-x64/maicli /usr/local/bin/
 ```
 

@@ -1,6 +1,25 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.0] - 2026-11-24`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.3] - 2026-11-24`.
+
+## [0.4.3] - 2026-11-24
+
+### Changed
+- **Kembali ke model distribusi satu bundle ala omp**: setelah mempelajari
+  `oh-my-pi/`, terbukti omp tidak memakai Electron/Tauri — TUI-nya adalah
+  `@oh-my-pi/pi-tui` (TypeScript, ANSI terminal) yang di-compile dengan
+  `bun build --compile` menjadi satu binary. maicli mengikuti model itu:
+  satu paket `@modeluxai/cli` berisi CLI + TUI terminal dalam satu biner Rust.
+
+### Removed
+- Folder `desktop/` (Electron 45 main process, preload, electron-builder) dan
+  job `gui` dari workflow rilis. GitHub Release kembali hanya berisi 6 arsip
+  biner CLI + checksum; tidak ada lagi `.exe` installer GUI berbasis Chromium.
+
+### Added
+- `optionalDependencies` wrapper mencakup 6 platform termasuk macOS x64/arm64;
+  `npm install -g @modeluxai/cli` kini satu perintah untuk semua platform.
+- Workflow `npm-publish.yml` menerbitkan paket platform darwin-x64 dan darwin-arm64.
 
 ## [0.4.0] - 2026-11-24
 

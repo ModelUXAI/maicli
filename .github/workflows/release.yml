@@ -178,95 +178,10 @@ jobs:
           if-no-files-found: error
 
 
-  gui:
-    name: gui (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            arsip: maicli-gui-linux
-            target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            arsip: maicli-gui-windows
-            target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            arsip: maicli-gui-macos
-            target: x86_64-apple-darwin
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref_name }}
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # 1) Bangun core CLI yang akan dibundel Electron.
-      - name: bangun core maicli
-        run: cargo build --release --locked -p tui-app --target ${{ matrix.target }}
-
-      # 2) Bangun frontend TypeScript → desktop/frontend-dist.
-      - name: pasang dependensi frontend
-        working-directory: frontend
-        run: npm ci
-      - name: bangun frontend
-        working-directory: frontend
-        run: npm run build
-      - name: salin frontend ke host Electron
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf desktop/frontend-dist
-          mkdir -p desktop/frontend-dist
-          cp -R frontend/dist/. desktop/frontend-dist/
-
-      # 3) Letakkan biner core di desktop/bin, lalu kemas dengan electron-builder.
-      - name: siapkan biner core
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p desktop/bin
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            cp "target/${{ matrix.target }}/release/maicli.exe" desktop/bin/maicli.exe
-          else
-            cp "target/${{ matrix.target }}/release/maicli" desktop/bin/maicli
-          fi
-
-      - name: pasang dependensi Electron
-        working-directory: desktop
-        shell: bash
-        # `npm ci` melewati postinstall electron-winstaller pada runner Windows
-        # (pemilihan arsitektur 7z), yang dibutuhkan electron-builder.
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then npm install; else npm ci; fi
-      - name: bangun installer Electron
-        working-directory: desktop
-        run: npm run dist
-
-      - name: kumpulkan artefak GUI
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist-gui
-          find desktop/release -maxdepth 1 -type f \
-            \( -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.zip' \) \
-            -exec cp {} dist-gui/ \;
-          ls -la dist-gui
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.arsip }}
-          path: dist-gui/*
-          if-no-files-found: warn
 
   release:
     name: release
-    needs: [build, gui]
+    needs: [build]
     # GitHub bisa membatalkan job macOS karena batas runner akun. Tetap rilis
     # artefak target yang berhasil (minimal satu) daripada melewati rilis
     # seluruhnya; `if-no-files-found: error` di upload menjamin tiap job sukses
