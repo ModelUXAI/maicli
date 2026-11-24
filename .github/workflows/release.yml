@@ -53,10 +53,10 @@ jobs:
             os: ubuntu-22.04
             arsip: maicli-linux-arm64
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-latest
             arsip: maicli-macos-arm64
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-latest
             arsip: maicli-macos-x64
           - target: x86_64-pc-windows-msvc
             os: windows-latest
@@ -195,7 +195,7 @@ jobs:
             arsip: maicli-gui-linux
           - os: windows-latest
             arsip: maicli-gui-windows
-          - os: macos-14
+          - os: macos-latest
             arsip: maicli-gui-macos
     steps:
       - uses: actions/checkout@v4
