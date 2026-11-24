@@ -70,11 +70,12 @@ jobs:
           fetch-depth: 0
 
       - name: release-plz release-pr
+        # Jangan set `env.GITHUB_TOKEN`: itu menimpa token bawaan action dengan
+        # token Actions yang dilarang repo membuat PR (403). Biarkan action
+        # memakai token defaultnya; izin `pull-requests: write` sudah diberikan.
         uses: release-plz/action@v0.5
         with:
           command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   binaries:
     name: binaries

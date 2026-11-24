@@ -1,8 +1,8 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.2.1] - 2026-11-24`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.3.0] - 2026-11-24`.
 
-## [Unreleased]
+## [0.3.0] - 2026-11-24
 
 ### Changed
 - **Redesain frontend GUI mengikuti 18 layar design reference (2026-11-24)**:
