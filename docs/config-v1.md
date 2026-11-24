@@ -73,8 +73,8 @@ negatif; lihat `crates/tui-context/src/budget.rs`.
 
 | Kunci | Tipe | Default | Arti |
 |---|---|---|---|
-| `accent` | string `#rrggbb`/`#rgb` | `#d7a05b` | warna status/approval |
-| `dim` | string `#rrggbb`/`#rgb` | `#8a8f98` | warna teks sekunder |
+| `accent` | string `#rrggbb`/`#rgb` | `#a2c9ff` | warna status/approval (default mengikuti `design-reference/*/code.html`) |
+| `dim` | string `#rrggbb`/`#rgb` | `#8b919d` | warna teks sekunder |
 
 Warna yang tidak valid ditolak saat memuat config (bukan diam-diam diabaikan).
 

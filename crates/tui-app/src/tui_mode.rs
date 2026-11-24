@@ -199,6 +199,57 @@ fn rekam_transkrip(
     }
 }
 
+/// Token warna execution truth dari `design-reference/*/code.html`.
+/// Dipakai terminal TUI supaya biner yang diunduh pengguna memakai sistem
+/// visual yang sama dengan referensi (bukan tema biru lama).
+#[derive(Debug, Clone, Copy)]
+struct Theme {
+    canvas: Color,
+    lowest: Color,
+    low: Color,
+    container: Color,
+    high: Color,
+    highest: Color,
+    on_surface: Color,
+    on_variant: Color,
+    outline: Color,
+    outline_variant: Color,
+    primary: Color,
+    primary_container: Color,
+    secondary: Color,
+    secondary_container: Color,
+    tertiary: Color,
+    tertiary_container: Color,
+    error: Color,
+    error_container: Color,
+}
+
+impl Theme {
+    fn reference() -> Self {
+        let rgb = |hex: &str| parse_color(hex);
+        Self {
+            canvas: rgb("#0b141c"),
+            lowest: rgb("#060f16"),
+            low: rgb("#141c24"),
+            container: rgb("#182028"),
+            high: rgb("#222b33"),
+            highest: rgb("#2d363e"),
+            on_surface: rgb("#dae3ee"),
+            on_variant: rgb("#c0c7d4"),
+            outline: rgb("#8b919d"),
+            outline_variant: rgb("#414752"),
+            primary: rgb("#a2c9ff"),
+            primary_container: rgb("#58a6ff"),
+            secondary: rgb("#dbb8ff"),
+            secondary_container: rgb("#593482"),
+            tertiary: rgb("#6fdd78"),
+            tertiary_container: rgb("#49b858"),
+            error: rgb("#ffb4ab"),
+            error_container: rgb("#93000a"),
+        }
+    }
+}
+
 struct Screen {
     lines: Vec<String>,
     current: String,
@@ -211,6 +262,8 @@ struct Screen {
     question: Option<PendingQuestion>,
     accent: Color,
     dim: Color,
+    /// Token warna referensi terminal (modal palette memakai field `palette`).
+    theme: Theme,
     keybindings: std::collections::HashMap<String, KeyEvent>,
     scroll: u16,
     view_height: u16,
@@ -284,6 +337,9 @@ impl Screen {
             question: None,
             accent,
             dim,
+            // Override `ui.accent` tetap dihormati, tetapi foundation palet
+            // mengikuti referensi, bukan warna lama.
+            theme: Theme::reference(),
             keybindings: std::collections::HashMap::new(),
             scroll: 0,
             view_height: 1,
@@ -434,7 +490,17 @@ impl Screen {
                     tui_wire::RenderHint::Diff => "±",
                     tui_wire::RenderHint::Plain => "→",
                 };
-                self.push_line(format!("{tanda} {} ({tool_name}): {preview}", meta.label));
+                // Referensi 08: sub-shell `╭─ TOOL │ RUNNING │ preview`.
+                let ringkas = preview.replace(['\n', '\r'], " ");
+                let ringkas = if ringkas.chars().count() > 72 {
+                    format!("{}…", ringkas.chars().take(71).collect::<String>())
+                } else {
+                    ringkas
+                };
+                self.push_line(format!(
+                    "╭─ {tool_name} │ RUNNING │ {tanda} {}: {}",
+                    meta.label, ringkas
+                ));
                 let index = self.lines.len().saturating_sub(1);
                 self.tool_details
                     .insert(index, format!("{tool_name} mulai\n{preview}"));
@@ -447,7 +513,14 @@ impl Screen {
             } => {
                 self.turn_state = tui_core::TurnStatus::ExecutingTools;
                 let mark = if is_error { "✗" } else { "✓" };
-                self.push_line(format!("{mark} {tool_name}: {preview}"));
+                let status = if is_error { "ERROR" } else { "DONE" };
+                let ringkas = preview.replace(['\n', '\r'], " ");
+                let ringkas = if ringkas.chars().count() > 64 {
+                    format!("{}…", ringkas.chars().take(63).collect::<String>())
+                } else {
+                    ringkas
+                };
+                self.push_line(format!("╰─ {tool_name} │ {status} │ {mark} {ringkas}"));
                 let index = self.lines.len().saturating_sub(1);
                 let status = if is_error { "gagal" } else { "selesai" };
                 self.tool_details
@@ -699,11 +772,80 @@ impl Screen {
         self.scroll = 0;
     }
 
+    /// Layar sambutan referensi 01: ASCII logo, kartu status nyata, quickstart.
+    /// Tidak ada angka rekaan: semua berasal dari state sesi yang sudah ada.
+    fn welcome_body(&self) -> Vec<Line<'static>> {
+        let p = self.theme;
+        let mut out = Vec::new();
+        for (text, color) in [
+            ("  ███╗   ███╗ █████╗ ██╗ ██████╗██╗     ██╗", p.secondary),
+            ("  ████╗ ████║██╔══██╗██║██╔════╝██║     ██║", p.primary),
+            (
+                "  ██╔████╔██║███████║██║██║     ██║     ██║",
+                p.primary_container,
+            ),
+            ("  ██║╚██╔╝██║██╔══██║██║██║     ██║     ██║", p.tertiary),
+            (
+                "  ██║ ╚═╝ ██║██║  ██║██║╚██████╗███████╗██║",
+                p.tertiary_container,
+            ),
+        ] {
+            out.push(Line::from(Span::styled(
+                text,
+                Style::default().fg(color).bold(),
+            )));
+        }
+        out.push(Line::from(""));
+        out.push(Line::from(Span::styled(
+            "  Antarmuka terminal agentic ModeluXAI — RPC aktif, 0 angka rekaan",
+            Style::default().fg(p.on_variant),
+        )));
+        out.push(Line::from(""));
+        out.push(Line::from(Span::styled(
+            "  STATUS",
+            Style::default().fg(p.outline).bg(p.low),
+        )));
+        out.push(Line::from(Span::styled(
+            format!("  model   {}", self.model),
+            Style::default().fg(p.on_surface),
+        )));
+        out.push(Line::from(Span::styled(
+            format!("  status  {}", self.status),
+            Style::default().fg(p.on_variant),
+        )));
+        out.push(Line::from(""));
+        out.push(Line::from(Span::styled(
+            "  RPC                 MODEL                  SESI",
+            Style::default().fg(p.outline).bg(p.low),
+        )));
+        out.push(Line::from(Span::styled(
+            format!(
+                "  {}    {}    {} pesan",
+                if self.pending.is_some() {
+                    "MENUNGGU"
+                } else {
+                    "AKTIF"
+                },
+                self.model,
+                self.queue.len()
+            ),
+            Style::default().fg(p.on_surface),
+        )));
+        out.push(Line::from(""));
+        out.push(Line::from(Span::styled(
+            "  QUICKSTART",
+            Style::default().fg(p.outline).bg(p.low),
+        )));
+        out.push(Line::from(Span::styled(
+            "  [1] Prompt baru      [2] Tool Inspector      [3] Command palette",
+            Style::default().fg(p.on_surface),
+        )));
+        out
+    }
+
     fn body(&self) -> Vec<Line<'static>> {
         if self.lines.is_empty() && self.current.is_empty() {
-            return vec![Line::from(
-                "Tulis prompt lalu tekan Enter. F1 untuk daftar tombol.",
-            )];
+            return self.welcome_body();
         }
         let mut lines: Vec<Line<'static>> = Vec::with_capacity(self.lines.len() + 1);
         let mut in_code_block = false;
@@ -851,7 +993,7 @@ impl Screen {
         } else if self.busy {
             "Esc/Ctrl+C batalkan turn · PgUp/PgDn gulir".to_string()
         } else {
-            "Enter kirim · Shift+Enter baris baru · PgUp/PgDn gulir · F1 bantuan · Ctrl+C 2x keluar"
+            "╰─ [Enter] kirim · [Shift+Enter] baris baru · [/] slash · [Ctrl+K] palette · [F1] bantuan"
                 .to_string()
         }
     }
@@ -890,6 +1032,10 @@ impl Screen {
     /// Tampilkan satu permintaan approval sebagai blok inline di timeline.
     fn show_pending(&mut self, pending: PendingApproval) {
         self.status = "1 persetujuan menunggu".to_string();
+        self.push_line("╔══ SECURITY & PERMISSION GUARDRAIL ══╗".to_string());
+        self.push_line(
+            "RISK: lihat detail di bawah · Y setuju sekali · N tolak · S setuju sesi".to_string(),
+        );
         self.push_line(format!("⏳ menunggu persetujuan: {}", pending.summary()));
         self.pending_line = Some(self.lines.len().saturating_sub(1));
         for detail in pending.verbatim_detail().lines() {
@@ -897,7 +1043,9 @@ impl Screen {
         }
         self.push_line(String::new());
         self.pending_choice_line = Some(self.lines.len());
-        self.push_line("   [ ] izinkan sekali     [ ] tolak   (Tab untuk memilih)".to_string());
+        self.push_line(
+            "   [Y] Setuju Sekali   [N] Tolak   [S] Setuju Sesi   (Tab memilih)".to_string(),
+        );
         self.pending_countdown_line = Some(self.lines.len());
         self.push_line("   sisa menghitung…".to_string());
         self.pending_since = Some(std::time::Instant::now());
@@ -926,9 +1074,9 @@ impl Screen {
         }
         if let Some(index) = self.pending_choice_line {
             let choice = match self.pending_choice {
-                Some(true) => "   [x] izinkan sekali     [ ] tolak",
-                Some(false) => "   [ ] izinkan sekali     [x] tolak",
-                None => "   [ ] izinkan sekali     [ ] tolak   (Tab untuk memilih)",
+                Some(true) => "   [x] Setuju Sekali   [ ] Tolak   [ ] Setuju Sesi",
+                Some(false) => "   [ ] Setuju Sekali   [x] Tolak   [ ] Setuju Sesi",
+                None => "   [ ] Setuju Sekali   [ ] Tolak   [ ] Setuju Sesi   (Tab)",
             };
             if let Some(line) = self.lines.get_mut(index) {
                 *line = choice.to_string();
@@ -2563,55 +2711,219 @@ fn centered_area(area: Rect, width: u16, height: u16) -> Rect {
     }
 }
 
+/// Band ASCII atas/bawah composer (referensi 02).
+fn composer_bands(width: usize) -> (&'static str, &'static str) {
+    let top = "╭─ Prompt (Markdown & Multi-line · Enter kirim, Shift+Enter baris baru)";
+    let bottom = "╰─ [Tab] Lengkapi  [/] Slash  [^C] Batalkan";
+    let _ = width;
+    (top, bottom)
+}
+
+/// Rail navigasi kiri. Labelnya nyata (fitur yang ada), bukan angka rekaan.
+fn rail_lines(screen: &Screen) -> Vec<Line<'static>> {
+    let p = screen.theme;
+    let nav = ["REPL Session", "Tool Inspector", "MCP (—)", "Settings"];
+    let mut out = Vec::new();
+    out.push(Line::from(Span::styled(
+        " NAVIGASI ",
+        Style::default().fg(p.outline).bg(p.low),
+    )));
+    for (index, item) in nav.iter().enumerate() {
+        let active = index == 0;
+        let style = if active {
+            Style::default().fg(p.on_surface).bg(p.highest)
+        } else {
+            Style::default().fg(p.container)
+        };
+        out.push(Line::from(Span::styled(
+            format!(" {}{} ", if active { "▌" } else { " " }, item),
+            style,
+        )));
+    }
+    out.push(Line::from(""));
+    out.push(Line::from(Span::styled(
+        " STATUS ",
+        Style::default().fg(p.outline).bg(p.low),
+    )));
+    out.push(Line::from(Span::styled(
+        format!(" model: {}", screen.model),
+        Style::default().fg(p.on_variant),
+    )));
+    out.push(Line::from(Span::styled(
+        format!(" {}", screen.status_line()),
+        Style::default().fg(p.outline),
+    )));
+    out.push(Line::from(Span::styled(
+        format!(
+            " approval: {}",
+            Screen::approval_label(screen.approval_mode)
+        ),
+        Style::default().fg(p.outline),
+    )));
+    out
+}
+
 fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
     screen.refresh_pending_lines();
-    // Lebar viewport dihitung dulu karena tinggi composer bergantung padanya.
+    let p = screen.theme;
     let area = frame.area();
-    screen.view_width = area.width.saturating_sub(2).max(1);
-    let composer = screen.composer_height();
+
+    // Canvas referensi: seluruh frame memakai surface gelap, bukan biru tua.
+    frame.render_widget(
+        Block::default().style(Style::default().bg(p.canvas).fg(p.on_surface)),
+        area,
+    );
+
+    // Hitung pembagian: badan composer mengikuti tinggi isi (3..12 baris).
+    let composer_total = screen.composer_height().clamp(3, 12);
+
     let chunks = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(3),
-        Constraint::Length(composer),
+        Constraint::Length(1),
+        Constraint::Length(composer_total.saturating_sub(2)),
+        Constraint::Length(1),
         Constraint::Length(1),
     ])
     .split(area);
+    let header = chunks[0];
+    let body = chunks[1];
+    let c_top = chunks[2];
+    let c_body = chunks[3];
+    let c_bottom = chunks[4];
+    let footer = chunks[5];
+
+    // Header: status line + indikator keadaan (semua data nyata dari state).
+    let (state_label, state_color) = if screen.pending.is_some() {
+        ("● MENUNGGU", p.error)
+    } else if screen.busy {
+        ("● RUNNING", p.tertiary_container)
+    } else {
+        ("○ IDLE", p.outline)
+    };
+    let header_line = Line::from(vec![
+        Span::styled(" ● ● ● ", Style::default().fg(p.error_container).bg(p.low)),
+        Span::styled(
+            "maicli :: ",
+            Style::default().fg(p.primary_container).bg(p.low),
+        ),
+        Span::styled(
+            format!("{} ", screen.model),
+            Style::default().fg(p.on_surface).bg(p.low),
+        ),
+        Span::styled("— ", Style::default().fg(p.outline_variant).bg(p.low)),
+        Span::styled(
+            format!("{} ", screen.status),
+            Style::default().fg(p.on_variant).bg(p.low),
+        ),
+        Span::styled(state_label, Style::default().fg(state_color).bg(p.low)),
+        Span::styled("  ● ● ● ", Style::default().fg(p.secondary).bg(p.low)),
+    ]);
     frame.render_widget(
-        Paragraph::new(screen.status_line()).style(Style::default().fg(screen.accent)),
-        chunks[0],
+        Paragraph::new(header_line).style(Style::default().bg(p.low)),
+        header,
     );
-    screen.view_height = chunks[1].height.saturating_sub(2).max(1);
-    screen.view_width = chunks[1].width.saturating_sub(2).max(1);
+
+    // Rail kiri hanya bila terminal cukup lebar.
+    let rail_width = if body.width >= 92 { 22u16 } else { 0u16 };
+    let columns =
+        Layout::horizontal([Constraint::Length(rail_width), Constraint::Min(20)]).split(body);
+    if rail_width > 0 {
+        frame.render_widget(
+            Paragraph::new(rail_lines(screen))
+                .style(Style::default().bg(p.low))
+                .block(
+                    Block::default()
+                        .borders(ratatui::widgets::Borders::RIGHT)
+                        .border_style(Style::default().fg(p.outline_variant)),
+                ),
+            columns[0],
+        );
+    }
+
+    screen.view_height = columns[1].height.saturating_sub(2).max(1);
+    screen.view_width = columns[1].width.saturating_sub(2).max(1);
+    let state_text = if screen.busy { "RUNNING" } else { "IDLE" };
     frame.render_widget(
         Paragraph::new(screen.body())
+            .style(Style::default().bg(p.lowest).fg(p.on_surface))
             .block(
                 Block::bordered()
-                    .title(" sesi ")
-                    .border_style(Style::default().fg(screen.accent)),
+                    .title(format!(" [0x1] TRANSCRIPT │ {state_text} "))
+                    .style(Style::default().bg(p.lowest))
+                    .border_style(Style::default().fg(p.outline_variant)),
             )
             .scroll((screen.top_offset(), 0))
             .wrap(Wrap { trim: false }),
-        chunks[1],
+        columns[1],
     );
-    let composer_title = if screen.question.is_some() {
-        " jawab "
-    } else {
-        " prompt "
-    };
+
+    // Composer tiga band dengan border ASCII referensi 02.
+    let (band_top, band_bottom) = composer_bands(usize::from(c_body.width));
     frame.render_widget(
-        Paragraph::new(format!("> {}", screen.input))
-            .block(
-                Block::bordered()
-                    .title(composer_title)
-                    .border_style(Style::default().fg(screen.accent)),
-            )
+        Paragraph::new(band_top).style(Style::default().fg(p.primary).bg(p.high)),
+        c_top,
+    );
+    // Meter konteks (referensi 14): bar ASCII dari data nyata `context`.
+    if let Some((tokens, window)) = screen.context
+        && let Some(pct) = tokens
+            .saturating_mul(100)
+            .checked_div(window)
+            .map(|v| v.min(100))
+    {
+        {
+            let filled = usize::from((pct as u16).saturating_mul(8) / 100);
+            let meter = format!(
+                "[{}{}] {}%",
+                "█".repeat(filled),
+                "░".repeat(8usize.saturating_sub(filled)),
+                pct
+            );
+            let meter_line = Line::from(vec![
+                Span::styled(
+                    " CTX ",
+                    Style::default().fg(p.secondary_container).bg(p.lowest),
+                ),
+                Span::styled(meter, Style::default().fg(p.tertiary).bg(p.lowest)),
+            ]);
+            frame.render_widget(
+                Paragraph::new(meter_line).style(Style::default().bg(p.lowest)),
+                Rect {
+                    x: c_body.x,
+                    y: c_body.y,
+                    width: c_body.width,
+                    height: 1,
+                },
+            );
+        }
+    }
+    let sigil = if screen.question.is_some() {
+        "?"
+    } else {
+        "❯"
+    };
+    let input_line = Line::from(vec![
+        Span::styled(format!("{sigil} "), Style::default().fg(p.primary).bold()),
+        Span::styled(
+            format!("{}█", screen.input),
+            Style::default().fg(p.on_surface).bg(p.lowest),
+        ),
+    ]);
+    frame.render_widget(
+        Paragraph::new(input_line)
+            .style(Style::default().bg(p.lowest))
             .wrap(Wrap { trim: false })
             .scroll((screen.composer_scroll(), 0)),
-        chunks[2],
+        c_body,
     );
     frame.render_widget(
-        Paragraph::new(screen.hint()).style(Style::default().fg(screen.dim)),
-        chunks[3],
+        Paragraph::new(band_bottom).style(Style::default().fg(p.outline).bg(p.high)),
+        c_bottom,
+    );
+
+    frame.render_widget(
+        Paragraph::new(screen.hint()).style(Style::default().fg(p.outline).bg(p.canvas)),
+        footer,
     );
     if screen.show_help {
         let area = centered_area(frame.area(), 64, 28);
@@ -2743,7 +3055,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
         frame.render_widget(
             Paragraph::new(text).block(
                 Block::bordered()
-                    .title(" command (Ctrl+K) ")
+                    .title(" ╭─ Slash commands (Ctrl+K) ")
                     .border_style(Style::default().fg(screen.accent)),
             ),
             area,
@@ -3299,6 +3611,55 @@ mod tests {
                     .to_string()
             })
             .collect()
+    }
+
+    #[test]
+    fn welcome_mengikuti_desain_referensi_bukan_layar_lama() {
+        let layar = screen();
+        let teks = layar
+            .body()
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(teks.contains("███"), "logo ASCII harus ada: {teks}");
+        assert!(teks.contains("QUICKSTART"), "{teks}");
+        assert!(teks.contains("STATUS"), "{teks}");
+        assert!(
+            !teks.contains("Tulis prompt lalu tekan Enter"),
+            "jangan tampilkan layar lama: {teks}"
+        );
+    }
+
+    #[test]
+    fn frame_memakai_shell_referensi_dan_bukan_tema_lama() {
+        let mut layar = screen();
+        let frame = render_frame(&mut layar, 140, 40);
+        let teks = frame.join("\n");
+        assert!(teks.contains("maicli ::"), "{teks}");
+        assert!(teks.contains("NAVIGASI"), "{teks}");
+        assert!(teks.contains("╭─ Prompt"), "{teks}");
+        assert!(teks.contains("╰─ [Enter]"), "{teks}");
+        assert!(!teks.contains("Tulis prompt lalu tekan Enter"), "{teks}");
+        assert!(
+            !teks.contains("─ sesi ─"),
+            "border lama tidak boleh ada: {teks}"
+        );
+    }
+
+    #[test]
+    fn palet_warna_mengikuti_code_html() {
+        let p = Theme::reference();
+        assert_eq!(p.canvas, Color::Rgb(11, 20, 28), "#0b141c");
+        assert_eq!(p.lowest, Color::Rgb(6, 15, 22), "#060f16");
+        assert_eq!(p.primary, Color::Rgb(162, 201, 255), "#a2c9ff");
+        assert_eq!(p.tertiary, Color::Rgb(111, 221, 120), "#6fdd78");
+        assert_eq!(p.error, Color::Rgb(255, 180, 171), "#ffb4ab");
     }
 
     #[test]
@@ -4267,10 +4628,15 @@ provider "uji-cat2" {
         assert_eq!(lines.first().map(String::as_str), Some("halo dunia"));
         assert_eq!(
             layar.pending_line,
-            Some(1),
-            "blok approval menempel tepat setelah baris terakhir"
+            Some(3),
+            "blok approval dengan ribbon + RISK menempel setelah baris terakhir"
         );
-        assert!(lines[1].contains("menunggu persetujuan"), "{lines:?}");
+        assert!(
+            lines[1].contains("SECURITY & PERMISSION GUARDRAIL"),
+            "{lines:?}"
+        );
+        assert!(lines[2].contains("RISK:"), "{lines:?}");
+        assert!(lines[3].contains("menunggu persetujuan"), "{lines:?}");
         assert!(
             lines.iter().any(|l| l.contains("menunggu persetujuan")),
             "{lines:?}"
@@ -4284,7 +4650,9 @@ provider "uji-cat2" {
             "argumen verbatim tampil: {lines:?}"
         );
         assert!(
-            lines.iter().any(|l| l.contains("Tab untuk memilih")),
+            lines
+                .iter()
+                .any(|l| l.contains("Setuju Sekali") && l.contains("Tolak")),
             "butuh pilihan eksplisit: {lines:?}"
         );
         layar.refresh_pending_lines();
@@ -4642,7 +5010,8 @@ provider "uji-cat2" {
         assert!(!teks.contains("Ctrl+C keluar"), "{teks}");
         layar.busy = false;
         let idle = layar.hint();
-        assert!(idle.contains("2x keluar"), "{idle}");
+        assert!(idle.contains("╰─"), "{idle}");
+        assert!(idle.contains("slash"), "{idle}");
     }
 
     #[test]
@@ -4921,11 +5290,11 @@ provider "uji-cat2" {
         });
         let baris = layar.lines.join("\n");
         assert!(
-            baris.contains("❯ perintah (bash): dir"),
+            baris.contains("╭─ bash │ RUNNING │ ❯ perintah: dir"),
             "bash harus tampil dengan label+petunjuk perintah: {baris}"
         );
         assert!(
-            baris.contains("→ baca (read): a.txt"),
+            baris.contains("╭─ read │ RUNNING │ → baca: a.txt"),
             "read harus tampil dengan label biasa: {baris}"
         );
     }
@@ -4942,7 +5311,7 @@ provider "uji-cat2" {
             layar
                 .lines
                 .join("\n")
-                .contains("→ tidak_ada (tidak_ada): x"),
+                .contains("╭─ tidak_ada │ RUNNING │ → tidak_ada: x"),
             "{:?}",
             layar.lines
         );

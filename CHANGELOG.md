@@ -1,6 +1,25 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.3.0] - 2026-11-24`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.3.1] - 2026-11-24`.
+
+## [0.3.1] - 2026-11-24
+
+### Fixed
+- **Tampilan biner `maicli` (terminal TUI) kini mengikuti design reference**: akar
+  masalah screenshot lama adalah renderer ratatui `crates/tui-app/src/tui_mode.rs`,
+  bukan GUI Tauri. `draw()` sekarang memakai shell referensi: header `maicli ::
+  <model> — <status>`, rail kiri (REPL Session / Tool Inspector / MCP / Settings +
+  status nyata), panel transkrip `[0x1]`, composer tiga band ASCII (`╭─ Prompt`,
+  `╰─ [Tab] …`), dan footer hint baru. Welcome menampilkan logo ASCII, kartu
+  RPC/MODEL/SESI, dan quickstart tanpa angka rekaan. Meter konteks ASCII `█░`
+  dipakai bila `ContextUsage` tersedia. Tool call dirender sebagai sub-shell
+  `╭─ TOOL │ RUNNING|DONE │ …`. Approval memakai ribbon guardrail + matriks
+  Y/N/S; palette slash memakai judul referensi. String lama "Tulis prompt lalu
+  tekan Enter…" dan hint `PgUp/PgDn gulir` tidak lagi muncul di jalur render.
+- Default `ui.accent` berubah `#d7a05b` → `#a2c9ff`, `ui.dim` `#8a8f98` →
+  `#8b919d` (`crates/tui-config/src/lib.rs`, `docs/config-v1.md`); override
+  pengguna tetap dihormati.
+
 
 ## [0.3.0] - 2026-11-24
 

@@ -394,6 +394,7 @@ pub struct CatalogConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
     /// Warna aksen (`#rrggbb`) untuk status dan bingkai aktif.
+    /// Default mengikuti execution truth `design-reference/*/code.html`.
     pub accent: String,
     /// Warna redup (`#rrggbb`) untuk hint dan teks sekunder.
     pub dim: String,
@@ -405,8 +406,8 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            accent: "#d7a05b".to_string(),
-            dim: "#8a8f98".to_string(),
+            accent: "#a2c9ff".to_string(),
+            dim: "#8b919d".to_string(),
             keybindings: std::collections::BTreeMap::new(),
         }
     }
@@ -1471,7 +1472,7 @@ mod tests {
             .iter()
             .find(|(key, _, _)| key == "ui.accent")
             .expect("baris ui.accent");
-        assert_eq!(accent.1, "#d7a05b");
+        assert_eq!(accent.1, "#a2c9ff");
         assert_eq!(accent.2, "default");
     }
 
