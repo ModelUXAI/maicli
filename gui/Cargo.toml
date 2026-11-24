@@ -1,0 +1,24 @@
+[package]
+name = "maicli-gui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+authors = ["iqbal"]
+description = "Desktop GUI maicli berbasis Tauri 2 + TypeScript"
+
+[lib]
+name = "maicli_gui_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.6", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[lints.rust]
+unsafe_code = "forbid"

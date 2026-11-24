@@ -4,6 +4,22 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Added
+- **GUI desktop maicli (2026-11-24)**: frontend Vite + React + TypeScript
+  (`frontend/`) dengan tema gelap, layar sambutan, daftar sesi, chip model/cwd,
+  panel aktivitas tool, dan footer hint meniru contoh omp. Shell Tauri 2
+  (`gui/`) menjalankan `maicli --mode rpc` sebagai child process; frame JSONL
+  diteruskan dua arah lewat command `rpc_send` + event `rpc-line`.
+- **Rilis GUI (2026-11-24)**: job `gui` di `release.yml` membangun `.exe` (NSIS/
+  MSI) Windows, `.deb`/AppImage Linux, dan `.dmg` macOS (lewat runner CI).
+  Amandemen RENCANA `A-2026-11-24` mencatat perubahan L-1/O-7/O-8.
+
+### Fixed
+- **Portabilitas & QA GUI**: `tauri-gui-xvfb-qa` — bukti screenshot nyata dari
+  `tauri build --no-bundle` di Xvfb (`/tmp/maicli-gui.png`), bukan `cargo build`.
+  Keluarga Tauri di-pin (2.11.6 / macros 2.6.3 / utils 2.9.3) sesuai skill
+  `tauri-pin-2-11-family`.
+
 ### Changed
 - **Konsistensi rilis + commit publik (2026-11-23)**: komentar header
   `release.yml` menyebut 6 target (bukan 4); `npm-publish.yml` memakai nama paket
