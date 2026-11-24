@@ -11,6 +11,7 @@
 )]
 
 pub mod entries;
+pub mod sqlite;
 pub mod store;
 
 pub use entries::{SESSION_VERSION, SessionEntry, new_id};

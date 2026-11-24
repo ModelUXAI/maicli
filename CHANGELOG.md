@@ -1,6 +1,22 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.4] - 2026-11-25`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.5] - 2026-11-25`.
+
+## [0.4.5] - 2026-11-25
+
+### Fixed
+- Dropdown saran kini ikut bergulir saat `↑`/`↓`/`Tab`: ditambahkan jendela
+  `offset` 7 entri, render hanya slice yang muat, dengan penanda atas/bawah.
+  Sebelumnya highlight keluar dari kotak, isi command tetap diam.
+
+### Added
+- Indeks sesi SQLite (`tui-session::sqlite`) di `.maicli/sessions/index.sqlite3`.
+  Sesi lama di `~/.config/ModeluXAI/TUI/sessions/` tidak dimigrasi/dihapus dan
+  tetap bisa di-resume; sesi baru memakai UUID v4 di
+  `.maicli/sessions/<uuid>/isi-sessions/*.jsonl`.
+- Flag `--backup-sessions <DIR>` menyalin seluruh transkrip terindeks ke folder
+  pilihan pengguna tanpa mengubah file asli.
+- `--resume <uuid>` mencari indeks SQLite lebih dulu, lalu fallback ke folder lama.
 
 ## [0.4.4] - 2026-11-25
 

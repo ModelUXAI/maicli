@@ -86,6 +86,9 @@ pub struct Cli {
     /// Tampilkan daftar sesi (opsional difilter judul) lalu keluar.
     #[arg(long, num_args = 0..=1, default_missing_value = "", value_name = "JUDUL")]
     pub list_sessions: Option<String>,
+    /// Salin semua transkrip yang terdaftar di indeks SQLite ke direktori ini.
+    #[arg(long, value_name = "DIR")]
+    pub backup_sessions: Option<PathBuf>,
     /// Perintah tambahan.
     #[command(subcommand)]
     pub command: Option<Command>,

@@ -469,9 +469,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.9"
+version = "4.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "844c5c0b65be192cb68d570cca1b21a6444431d24e39c084dc0336177015337c"
+checksum = "50066ca966813ca8957ee15361752f19424a8ff620dbe9c8993d9f99d99b04b3"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -479,9 +479,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.6.7"
+version = "4.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
+checksum = "a0ed97c96ef4efb3cc84e09fa388df4463e7cc3224ec38d7b1d9e45749333590"
 dependencies = [
  "anstream",
  "anstyle",
@@ -4180,7 +4180,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tui-app"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4218,7 +4218,7 @@ dependencies = [
 
 [[package]]
 name = "tui-approval"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "serde",
@@ -4230,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "tui-computer"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4246,7 +4246,7 @@ dependencies = [
 
 [[package]]
 name = "tui-config"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "directories",
  "keyring",
@@ -4259,14 +4259,14 @@ dependencies = [
 
 [[package]]
 name = "tui-context"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "tui-wire",
 ]
 
 [[package]]
 name = "tui-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4282,7 +4282,7 @@ dependencies = [
 
 [[package]]
 name = "tui-katalog"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "globset",
  "kdl",
@@ -4290,7 +4290,7 @@ dependencies = [
 
 [[package]]
 name = "tui-mcp"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4306,7 +4306,7 @@ dependencies = [
 
 [[package]]
 name = "tui-memory"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "rusqlite",
@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "tui-provider"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "reqwest",
@@ -4333,7 +4333,7 @@ dependencies = [
 
 [[package]]
 name = "tui-sdk"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4347,18 +4347,20 @@ dependencies = [
 
 [[package]]
 name = "tui-session"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
+ "rusqlite",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tracing",
  "tui-wire",
+ "uuid",
 ]
 
 [[package]]
 name = "tui-subagent"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4374,7 +4376,7 @@ dependencies = [
 
 [[package]]
 name = "tui-tools"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "async-trait",
  "flate2",
@@ -4395,7 +4397,7 @@ dependencies = [
 
 [[package]]
 name = "tui-wire"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "base64 0.22.1",
  "serde",

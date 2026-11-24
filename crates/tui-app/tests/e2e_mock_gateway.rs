@@ -353,15 +353,26 @@ fn crash_di_tengah_turn_tidak_merusak_sesi() {
     // Tunggu berkas sesi muncul (sesi dibuat sebelum permintaan model).
     let sessions_dir = root.join("maicli-data").join("sessions");
     let mut session_path = None;
-    for _ in 0..200 {
-        if let Ok(entries) = std::fs::read_dir(&sessions_dir) {
-            for entry in entries.flatten() {
-                if entry.path().extension().is_some_and(|ext| ext == "jsonl") {
-                    session_path = Some(entry.path());
-                    break;
-                }
+    // Sesi baru memakai layout `<uuid>/isi-sessions/*.jsonl`, jadi cari rekursif.
+    fn cari_jsonl(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+        let mut entries: Vec<_> = std::fs::read_dir(dir).ok()?.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in &entries {
+            if entry.path().extension().is_some_and(|ext| ext == "jsonl") {
+                return Some(entry.path());
             }
         }
+        for entry in entries {
+            if entry.path().is_dir()
+                && let Some(found) = cari_jsonl(&entry.path())
+            {
+                return Some(found);
+            }
+        }
+        None
+    }
+    for _ in 0..200 {
+        session_path = cari_jsonl(&sessions_dir);
         if session_path.is_some() {
             break;
         }

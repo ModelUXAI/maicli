@@ -30,10 +30,28 @@ pub async fn append(store: &mut Option<SessionStore>, entry: tui_session::Sessio
     }
 }
 
-/// Buat store sesi baru di `sessions_dir` (dipakai `/new`).
+/// Buat store sesi baru dengan UUID v4 di layout `.maicli/sessions/<uuid>/isi-sessions/`.
+///
+/// Sesi lama di `sessions_dir` tidak disentuh; indeks SQLite dipakai sebagai
+/// daftar cepat dan sumber backup, sehingga percakapan lama tetap bisa di-resume.
 pub async fn create_new(sessions_dir: PathBuf, cwd: String) -> Result<SessionStore, MxError> {
     let created = tokio::task::spawn_blocking(move || {
-        SessionStore::create(&sessions_dir, "sesi maicli", &cwd)
+        let id = tui_session::sqlite::new_uuid();
+        let dir =
+            tui_session::sqlite::session_dir(sessions_dir.parent().unwrap_or(&sessions_dir), &id);
+        let store = SessionStore::create_with_id(&dir, id.clone(), "sesi maicli", &cwd)?;
+        // Daftarkan ke indeks SQLite bila bisa; kegagalan indeks tidak membatalkan sesi.
+        if let Ok(conn) = tui_session::sqlite::open(sessions_dir.parent().unwrap_or(&sessions_dir))
+        {
+            let _ = tui_session::sqlite::upsert(
+                &conn,
+                &id,
+                store.path(),
+                "sesi maicli",
+                tui_session::entries::now_ms(),
+            );
+        }
+        Ok(store)
     })
     .await;
     match created {
@@ -78,7 +96,30 @@ pub async fn open_or_create(
 ) -> Result<SessionStore, MxError> {
     let opened = tokio::task::spawn_blocking(move || match resume {
         Some(path) => SessionStore::open(&path),
-        None => SessionStore::create(&sessions_dir, "sesi maicli", &cwd),
+        None => {
+            // Pastikan sessions_dir bisa dipakai; kalau ia adalah file, laporkan
+            // galat seperti sebelum layout UUID diperkenalkan.
+            if sessions_dir.exists() && !sessions_dir.is_dir() {
+                return Err(MxError::new(
+                    ErrorCode::SessionCorrupt,
+                    format!("bukan direktori: {}", sessions_dir.display()),
+                ));
+            }
+            let id = tui_session::sqlite::new_uuid();
+            let root = sessions_dir.parent().unwrap_or(&sessions_dir);
+            let dir = tui_session::sqlite::session_dir(root, &id);
+            let store = SessionStore::create_with_id(&dir, id.clone(), "sesi maicli", &cwd)?;
+            if let Ok(conn) = tui_session::sqlite::open(root) {
+                let _ = tui_session::sqlite::upsert(
+                    &conn,
+                    &id,
+                    store.path(),
+                    "sesi maicli",
+                    tui_session::entries::now_ms(),
+                );
+            }
+            Ok(store)
+        }
     })
     .await;
     match opened {

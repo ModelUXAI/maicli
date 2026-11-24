@@ -79,7 +79,31 @@ struct Suggest {
     kind: SuggestKind,
     query: String,
     selected: usize,
+    /// Baris pertama yang terlihat pada jendela dropdown (maks 8 baris isi).
+    offset: usize,
     items: Vec<SuggestItem>,
+}
+
+impl Suggest {
+    /// Jumlah entri yang muat. Dropdown 12 baris: 2 border + 1 query + 2 penanda gulir.
+    const VIEW: usize = 7;
+
+    /// Geser jendela supaya baris terpilih selalu terlihat.
+    fn clamp_offset(&mut self) {
+        if self.items.is_empty() {
+            self.offset = 0;
+            return;
+        }
+        let last = self.selected;
+        if last < self.offset {
+            self.offset = last;
+        }
+        if last >= self.offset + Self::VIEW {
+            self.offset = last + 1 - Self::VIEW;
+        }
+        let max_offset = self.items.len().saturating_sub(Self::VIEW);
+        self.offset = self.offset.min(max_offset);
+    }
 }
 
 impl Suggest {
@@ -88,6 +112,7 @@ impl Suggest {
             kind: SuggestKind::Command,
             query,
             selected: 0,
+            offset: 0,
             items: Vec::new(),
         };
         s.refresh();
@@ -99,6 +124,7 @@ impl Suggest {
             kind: SuggestKind::Mention,
             query,
             selected: 0,
+            offset: 0,
             items: Vec::new(),
         };
         s.refresh();
@@ -114,6 +140,7 @@ impl Suggest {
         if self.selected >= self.items.len() {
             self.selected = self.items.len().saturating_sub(1);
         }
+        self.clamp_offset();
     }
 
     /// Command bawaan + skill yang terpasang, difilter oleh query.
@@ -842,6 +869,7 @@ impl Screen {
             KeyCode::Up => {
                 let suggest = self.suggest.as_mut()?;
                 suggest.selected = suggest.selected.saturating_sub(1);
+                suggest.clamp_offset();
                 return None;
             }
             KeyCode::Down | KeyCode::Tab => {
@@ -849,6 +877,7 @@ impl Screen {
                 if count > 0 && suggest.selected + 1 < count {
                     suggest.selected += 1;
                 }
+                suggest.clamp_offset();
                 return None;
             }
             KeyCode::Backspace => {
@@ -2953,7 +2982,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
     let suggest_height = screen
         .suggest
         .as_ref()
-        .map(|s| (s.items.len() as u16 + 2).clamp(4, 10))
+        .map(|s| (s.items.len() as u16 + 4).clamp(6, 12))
         .unwrap_or(0);
 
     let chunks = Layout::vertical([
@@ -3235,7 +3264,16 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
                 Style::default().fg(p.on_variant),
             ),
         ]));
-        for (index, item) in items.iter().enumerate() {
+        // Hanya render jendela yang muat; highlight ikut bergulir bersama isi.
+        let start = suggest.offset.min(items.len());
+        let end = (start + Suggest::VIEW).min(items.len());
+        if start > 0 {
+            lines.push(Line::from(Span::styled(
+                "  ↑ baris sebelumnya",
+                Style::default().fg(p.outline),
+            )));
+        }
+        for (index, item) in items.iter().enumerate().take(end).skip(start) {
             let active = index == suggest.selected;
             let mark = if active { "▌" } else { " " };
             let style = if active {
@@ -3251,6 +3289,12 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
                     Style::default().fg(p.outline),
                 ),
             ]));
+        }
+        if end < items.len() {
+            lines.push(Line::from(Span::styled(
+                format!("  ↓ {} entri lagi", items.len() - end),
+                Style::default().fg(p.outline),
+            )));
         }
         frame.render_widget(
             Paragraph::new(lines).block(
@@ -3774,7 +3818,7 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
 mod tests {
     // Handler tombol diuji lewat assert yang gagal keras; `panic!` di test
     // adalah cara yang jelas untuk menunjuk tombol mana yang salah.
-    #![allow(clippy::panic, clippy::expect_used)]
+    #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
     use super::*;
     use tokio::sync::mpsc::UnboundedReceiver;
@@ -4983,6 +5027,43 @@ provider "uji-cat2" {
         assert!(screen.handle_key(key(KeyCode::Esc), &tx).is_none());
         assert!(screen.suggest.is_none());
         assert!(screen.input.is_empty(), "escape tidak menulis ke composer");
+    }
+
+    #[test]
+    fn scroll_dropdown_menggeser_offset_dan_highlight() {
+        let mut layar = screen();
+        let (tx, _rx) = unbounded_channel::<Command>();
+        layar.open_suggest(SuggestKind::Command, String::new());
+        assert_eq!(layar.suggest.as_ref().unwrap().offset, 0);
+        for _ in 0..12 {
+            assert!(layar.handle_key(key(KeyCode::Down), &tx).is_none());
+        }
+        let (selected, offset, label) = {
+            let suggest = layar.suggest.as_ref().unwrap();
+            (
+                suggest.selected,
+                suggest.offset,
+                suggest.items[suggest.selected].label.clone(),
+            )
+        };
+        assert_eq!(selected, 12);
+        assert!(offset > 0, "jendela harus ikut bergulir");
+        assert!(
+            selected >= offset && selected < offset + Suggest::VIEW,
+            "highlight harus berada di dalam jendela yang terlihat"
+        );
+        // Frame menampilkan entri yang sedang dipilih, bukan entri pertama saja.
+        let frame = render_frame(&mut layar, 120, 34);
+        let konten = frame.join("\n");
+        assert!(
+            konten.contains(&label),
+            "entri terpilih {label} harus tampil"
+        );
+        // Naik kembali menggeser offset ke atas.
+        for _ in 0..12 {
+            let _ = layar.handle_key(key(KeyCode::Up), &tx);
+        }
+        assert_eq!(layar.suggest.as_ref().unwrap().offset, 0);
     }
 
     #[test]

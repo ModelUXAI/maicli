@@ -453,6 +453,51 @@ impl SessionStore {
         Self::create_with_parent(dir, title, cwd, None)
     }
 
+    /// Buat sesi dengan id yang ditentukan (UUID v4 ala omp).
+    /// Dipakai layout baru `.maicli/sessions/<uuid>/isi-sessions/`.
+    pub fn create_with_id(dir: &Path, id: String, title: &str, cwd: &str) -> Result<Self, MxError> {
+        fs::create_dir_all(dir).map_err(|e| io_error(e, dir))?;
+        let stamp = now_ms();
+        let path = dir.join(format!("{stamp}_{id}.jsonl"));
+        let header = SessionEntry::Session {
+            version: SESSION_VERSION,
+            id: id.clone(),
+            title: title.to_string(),
+            created_at: stamp,
+            cwd: cwd.to_string(),
+            parent_session: None,
+        };
+        let init = SessionEntry::SessionInit {
+            id: new_id(),
+            timestamp: stamp,
+            cwd: cwd.to_string(),
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+        };
+        write_atomic(&path, &[header, init])?;
+        let lock = match acquire_lock(&path) {
+            Ok(lock) => lock,
+            Err(err) => {
+                let _ = fs::remove_file(&path);
+                return Err(err);
+            }
+        };
+        let writer = OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .map_err(|e| io_error(e, &path))?;
+        let written = fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+        Ok(Self {
+            path,
+            writer: Some(BufWriter::new(writer)),
+            lock,
+            title: title.to_string(),
+            cwd: cwd.to_string(),
+            session_id: id,
+            written,
+            max_bytes: MAX_SESSION_BYTES,
+        })
+    }
+
     /// Seperti [`Self::create`] tetapi header memuat `parent_session`
     /// (lineage subagent; dipakai `tui-subagent`).
     pub fn create_with_parent(

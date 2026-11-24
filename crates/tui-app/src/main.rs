@@ -215,9 +215,28 @@ async fn resolve_resume(
         return Ok(None);
     };
     let (path, loaded) = tokio::task::spawn_blocking(move || {
-        let summary = tui_session::resolve_target(&sessions_dir, &requested)?;
-        let loaded = tui_session::SessionStore::load(&summary.path)?;
-        Ok::<_, tui_wire::MxError>((summary.path, loaded))
+        // UUID baru: cari dulu di indeks SQLite (layout .maicli/sessions/<uuid>).
+        let root = sessions_dir.parent().unwrap_or(&sessions_dir);
+        let indexed = tui_session::sqlite::open(root).ok().and_then(|conn| {
+            tui_session::sqlite::resolve(&conn, &requested)
+                .ok()
+                .flatten()
+        });
+        let path = indexed
+            .map(|entry| entry.path)
+            .or_else(|| {
+                tui_session::resolve_target(&sessions_dir, &requested)
+                    .ok()
+                    .map(|summary| summary.path)
+            })
+            .ok_or_else(|| {
+                tui_wire::MxError::new(
+                    tui_wire::ErrorCode::SessionNotFound,
+                    format!("sesi '{requested}' tidak ada di indeks maupun folder lama"),
+                )
+            })?;
+        let loaded = tui_session::SessionStore::load(&path)?;
+        Ok::<_, tui_wire::MxError>((path, loaded))
     })
     .await
     .map_err(|_| {
@@ -336,6 +355,30 @@ async fn main() -> ExitCode {
     }
     let _guard = logging::init(&root.join("logs"));
     let sessions_dir = root.join("sessions");
+
+    // Backup sesi dari indeks SQLite tanpa menyentuh file asli.
+    if let Some(destination) = args.backup_sessions.clone() {
+        let display_path = destination.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            let conn = tui_session::sqlite::open(&root)?;
+            tui_session::sqlite::backup(&conn, &destination)
+        })
+        .await;
+        match result {
+            Ok(Ok(count)) => {
+                println!("{count} sesi disalin ke {}", display_path.display());
+                return ExitCode::SUCCESS;
+            }
+            Ok(Err(err)) => {
+                eprintln!("gagal membackup sesi: {}", err.message);
+                return ExitCode::from(1);
+            }
+            Err(_) => {
+                eprintln!("gagal membackup sesi: task blocking dibatalkan");
+                return ExitCode::from(1);
+            }
+        }
+    }
 
     if let (Some(expected), Some(actual)) =
         (args.parity_expected.clone(), args.parity_actual.clone())
