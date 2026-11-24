@@ -1,6 +1,20 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.3] - 2026-11-24`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.4] - 2026-11-25`.
+
+## [0.4.4] - 2026-11-25
+
+### Added
+- **Dropdown saran interaktif di bawah composer** (referensi `Contoh-TUI6.jpg`):
+  menekan `/` atau `Ctrl+K` membuka daftar command + skill yang terpasang;
+  menekan `@` membuka daftar file/folder relatif cwd. `↑`/`↓`/`Tab` memilih,
+  `Enter` menyisipkan path atau menjalankan command, `Esc` menutup.
+- Skill terpasang (`skills/<nama>/SKILL.md` dan `MAICLI_SKILLS_DIR`) kini tampil
+  di palette slash sebagai `skill:<nama>` dengan deskripsi dari frontmatter.
+
+### Changed
+- Palette tidak lagi centered overlay; sekarang dropdown 4–10 baris tepat di
+  bawah composer, dengan highlight baris aktif dan filter teks langsung.
 
 ## [0.4.3] - 2026-11-24
 

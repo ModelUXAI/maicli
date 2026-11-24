@@ -1974,9 +1974,9 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "litrs"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4744e383959f0db86ede514b809b1c53251889093803c05267acc7d4e7030d70"
+checksum = "02b614978e47ce529faee66579f2b2fe19c94aa96d910a6a9a8043b2b02d8175"
 
 [[package]]
 name = "lock_api"
@@ -4180,7 +4180,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tui-app"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4218,7 +4218,7 @@ dependencies = [
 
 [[package]]
 name = "tui-approval"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "serde",
@@ -4230,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "tui-computer"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "arboard",
  "async-trait",
@@ -4246,7 +4246,7 @@ dependencies = [
 
 [[package]]
 name = "tui-config"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "directories",
  "keyring",
@@ -4259,14 +4259,14 @@ dependencies = [
 
 [[package]]
 name = "tui-context"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "tui-wire",
 ]
 
 [[package]]
 name = "tui-core"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4282,7 +4282,7 @@ dependencies = [
 
 [[package]]
 name = "tui-katalog"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "globset",
  "kdl",
@@ -4290,7 +4290,7 @@ dependencies = [
 
 [[package]]
 name = "tui-mcp"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4306,7 +4306,7 @@ dependencies = [
 
 [[package]]
 name = "tui-memory"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "rusqlite",
@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "tui-provider"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "reqwest",
@@ -4333,7 +4333,7 @@ dependencies = [
 
 [[package]]
 name = "tui-sdk"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4347,7 +4347,7 @@ dependencies = [
 
 [[package]]
 name = "tui-session"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -4358,7 +4358,7 @@ dependencies = [
 
 [[package]]
 name = "tui-subagent"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "serde_json",
@@ -4374,7 +4374,7 @@ dependencies = [
 
 [[package]]
 name = "tui-tools"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-trait",
  "flate2",
@@ -4395,7 +4395,7 @@ dependencies = [
 
 [[package]]
 name = "tui-wire"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -5501,18 +5501,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.64"
+version = "0.8.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed43f3060383c64b000f3c630550aebdfa9d3b76d48de32390483dd2cc7e0865"
+checksum = "32bc8a75f879cd6fe53a6bedf3c28f0e1b914c77424fc2be9e2ec85d7d25aff5"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.64"
+version = "0.8.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5cbd820fe3e35fb38c83b6dc7e6b1618bc46e0cd10073ae94e8d52dc468d8b9"
+checksum = "b8bfd2644ea1681f60cf95029ff18aa8ad1cc3f7b8fe37286f8e473bb29f816b"
 dependencies = [
  "proc-macro2",
  "quote",

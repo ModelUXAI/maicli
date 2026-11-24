@@ -23,9 +23,7 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use unicode_width::UnicodeWidthChar;
 
 use tui_approval::{Approver, Decision, PolicyApprover};
-use tui_core::{
-    AgentSession, COMMANDS, CommandContext, CommandResult, CommandSpec, TurnSettings, dispatch,
-};
+use tui_core::{AgentSession, COMMANDS, CommandContext, CommandResult, TurnSettings, dispatch};
 use tui_session::{SessionEntry, SessionStore};
 use tui_tools::{AskRequest, ToolContext};
 use tui_wire::{AgentEvent, ErrorCode, MxError, ProviderEvent, SessionChoice};
@@ -57,11 +55,152 @@ enum Action {
     SwitchSession(String),
 }
 
-/// Palet command (`Ctrl+K`) yang sedang terbuka.
+/// Satu entri pada dropdown saran (command, skill, atau path).
+#[derive(Debug, Clone)]
+struct SuggestItem {
+    /// Teks yang dipakai saat filter (nama command / skill / path).
+    label: String,
+    /// Penjelasan singkat; untuk skill diambil dari frontmatter `description:`.
+    detail: String,
+    /// Teks yang disisipkan ke composer saat dipilih.
+    insert: String,
+}
+
+/// Sumber dropdown: `/` (command + skill) atau `@` (file/folder).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SuggestKind {
+    Command,
+    Mention,
+}
+
+/// Dropdown saran di bawah composer.
 #[derive(Debug)]
-struct Palette {
+struct Suggest {
+    kind: SuggestKind,
     query: String,
     selected: usize,
+    items: Vec<SuggestItem>,
+}
+
+impl Suggest {
+    fn command(query: String) -> Self {
+        let mut s = Self {
+            kind: SuggestKind::Command,
+            query,
+            selected: 0,
+            items: Vec::new(),
+        };
+        s.refresh();
+        s
+    }
+
+    fn mention(query: String) -> Self {
+        let mut s = Self {
+            kind: SuggestKind::Mention,
+            query,
+            selected: 0,
+            items: Vec::new(),
+        };
+        s.refresh();
+        s
+    }
+
+    /// Hitung ulang daftar dari sumbernya (registry command + skills / filesystem).
+    fn refresh(&mut self) {
+        match self.kind {
+            SuggestKind::Command => self.refresh_commands(),
+            SuggestKind::Mention => self.refresh_paths(),
+        }
+        if self.selected >= self.items.len() {
+            self.selected = self.items.len().saturating_sub(1);
+        }
+    }
+
+    /// Command bawaan + skill yang terpasang, difilter oleh query.
+    fn refresh_commands(&mut self) {
+        let q = self.query.to_ascii_lowercase();
+        let mut items: Vec<SuggestItem> = COMMANDS
+            .iter()
+            .filter(|spec| {
+                q.is_empty()
+                    || spec.name.to_ascii_lowercase().contains(&q)
+                    || spec.description.to_ascii_lowercase().contains(&q)
+            })
+            .map(|spec| SuggestItem {
+                label: format!("/{}", spec.name),
+                detail: if spec.usage.is_empty() {
+                    spec.description.to_string()
+                } else {
+                    format!("{} — {}", spec.usage, spec.description)
+                },
+                insert: if spec.allow_args {
+                    format!("/{} ", spec.name)
+                } else {
+                    format!("/{}", spec.name)
+                },
+            })
+            .collect();
+        // Skill yang sudah terpasang ikut tampil sebagai `/nama-skill`.
+        for skill in skills_tersedia() {
+            let label = format!("skill:{}", skill.nama);
+            if q.is_empty()
+                || label.contains(&q)
+                || skill.deskripsi.to_ascii_lowercase().contains(&q)
+            {
+                items.push(SuggestItem {
+                    label,
+                    detail: if skill.deskripsi.is_empty() {
+                        "skill terpasang".to_string()
+                    } else {
+                        skill.deskripsi
+                    },
+                    insert: format!("@{} ", skill.nama),
+                });
+            }
+        }
+        self.items = items;
+    }
+
+    /// Path relatif cwd yang cocok dengan query setelah `@`.
+    fn refresh_paths(&mut self) {
+        self.items = std::fs::read_dir(".")
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with('.')
+                    || !name
+                        .to_ascii_lowercase()
+                        .contains(&self.query.to_ascii_lowercase())
+                {
+                    return None;
+                }
+                let kind = entry.file_type().ok()?;
+                let suffix = if kind.is_dir() { "/" } else { "" };
+                Some(SuggestItem {
+                    label: format!("{name}{suffix}"),
+                    detail: if kind.is_dir() { "folder" } else { "berkas" }.to_string(),
+                    insert: format!("@{name}{suffix}"),
+                })
+            })
+            .take(40)
+            .collect();
+        self.items.sort_by(|a, b| a.label.cmp(&b.label));
+    }
+}
+
+/// Skill yang terpasang (folder `skills/` di cwd atau `MAICLI_SKILLS_DIR`).
+fn skills_tersedia() -> Vec<tui_tools::skills::Skill> {
+    let mut hasil = tui_tools::skills::temukan(std::path::Path::new("skills"));
+    if let Ok(extra) = std::env::var("MAICLI_SKILLS_DIR") {
+        for skill in tui_tools::skills::temukan(std::path::Path::new(&extra)) {
+            if !hasil.iter().any(|s| s.nama == skill.nama) {
+                hasil.push(skill);
+            }
+        }
+    }
+    hasil
 }
 
 /// Pemilih sesi yang sedang terbuka.
@@ -270,7 +409,7 @@ struct Screen {
     view_width: u16,
     show_help: bool,
     picker: Option<Picker>,
-    palette: Option<Palette>,
+    suggest: Option<Suggest>,
     expanded_tools: bool,
     tool_details: std::collections::HashMap<usize, String>,
     tool_meta: std::collections::HashMap<String, tui_wire::AgentToolMeta>,
@@ -346,7 +485,7 @@ impl Screen {
             view_width: 80,
             show_help: false,
             picker: None,
-            palette: None,
+            suggest: None,
             expanded_tools: false,
             tool_details: std::collections::HashMap::new(),
             tool_meta: tui_tools::ToolRegistry::v1()
@@ -682,64 +821,93 @@ impl Screen {
         }
     }
 
-    /// Command yang lolos filter palet (query dicocokkan ke nama, usage, deskripsi).
-    fn palette_items(&self) -> Vec<&'static CommandSpec> {
-        let query = self
-            .palette
+    /// Daftar saran aktif (kosong bila dropdown tidak terbuka).
+    fn suggest_items(&self) -> &[SuggestItem] {
+        self.suggest
             .as_ref()
-            .map(|palette| palette.query.to_ascii_lowercase())
-            .unwrap_or_default();
-        COMMANDS
-            .iter()
-            .filter(|spec| {
-                query.is_empty()
-                    || spec.name.to_ascii_lowercase().contains(&query)
-                    || spec.usage.to_ascii_lowercase().contains(&query)
-                    || spec.description.to_ascii_lowercase().contains(&query)
-            })
-            .collect()
+            .map(|s| s.items.as_slice())
+            .unwrap_or(&[])
     }
 
-    fn palette_key(&mut self, key: KeyEvent) -> Option<Action> {
-        let items = self.palette_items();
-        let count = items.len();
-        let palette = self.palette.as_mut()?;
+    /// Tangani tombol saat dropdown saran aktif; `Some(Action)` bila perlu submit.
+    fn suggest_key(&mut self, key: KeyEvent) -> Option<Action> {
+        let state = self.suggest.as_ref()?;
+        let count = state.items.len();
+        let kind = state.kind;
         match key.code {
             KeyCode::Esc => {
-                self.palette = None;
+                self.suggest = None;
+                return None;
             }
             KeyCode::Up => {
-                palette.selected = palette.selected.saturating_sub(1);
+                let suggest = self.suggest.as_mut()?;
+                suggest.selected = suggest.selected.saturating_sub(1);
+                return None;
             }
-            KeyCode::Down => {
-                if palette.selected + 1 < count {
-                    palette.selected += 1;
+            KeyCode::Down | KeyCode::Tab => {
+                let suggest = self.suggest.as_mut()?;
+                if count > 0 && suggest.selected + 1 < count {
+                    suggest.selected += 1;
                 }
+                return None;
             }
             KeyCode::Backspace => {
-                palette.query.pop();
-                palette.selected = 0;
+                let suggest = self.suggest.as_mut()?;
+                suggest.query.pop();
+                suggest.selected = 0;
+                suggest.refresh();
+                return None;
             }
             KeyCode::Enter => {
-                let selected = palette.selected.min(count.saturating_sub(1));
-                let spec = items.get(selected).copied();
-                self.palette = None;
-                let spec = spec?;
-                if spec.allow_args {
-                    self.input = format!("/{} ", spec.name);
-                    return None;
-                }
-                let text = format!("/{}", spec.name);
-                self.history.push(text.clone());
-                return Some(Action::Submit(text));
+                let suggest = self.suggest.as_ref()?;
+                let picked = suggest.items.get(suggest.selected).cloned();
+                self.suggest = None;
+                let item = picked?;
+                return match kind {
+                    SuggestKind::Mention => {
+                        // Sisipkan path pada posisi `@query`, bukan menimpa input.
+                        if let Some(idx) = self.input.rfind('@') {
+                            self.input.truncate(idx);
+                            self.input.push_str(&item.insert);
+                        } else {
+                            self.input.push_str(&item.insert);
+                        }
+                        self.status = format!("disisipkan: {}", item.label);
+                        None
+                    }
+                    SuggestKind::Command => {
+                        if item.insert.ends_with(' ') {
+                            self.input = item.insert.clone();
+                            self.status = format!("{} — lengkapi argumen", item.label);
+                            None
+                        } else {
+                            let text = item.insert.clone();
+                            self.history.push(text.clone());
+                            Some(Action::Submit(text))
+                        }
+                    }
+                };
             }
             KeyCode::Char(ch) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                palette.query.push(ch);
-                palette.selected = 0;
+                let suggest = self.suggest.as_mut()?;
+                suggest.query.push(ch);
+                suggest.selected = 0;
+                suggest.refresh();
+                return None;
             }
             _ => {}
         }
         None
+    }
+
+    /// Buka dropdown command/skill atau mention path dari composer.
+    fn open_suggest(&mut self, kind: SuggestKind, query: String) {
+        self.show_help = false;
+        self.picker = None;
+        self.suggest = Some(match kind {
+            SuggestKind::Command => Suggest::command(query),
+            SuggestKind::Mention => Suggest::mention(query),
+        });
     }
 
     /// Sisipkan teks tempel (paste) ke composer sebagai satu baris.
@@ -1123,16 +1291,11 @@ impl Screen {
         if self.key_override("palette", key)
             || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('k'))
         {
-            self.show_help = false;
-            self.picker = None;
-            self.palette = Some(Palette {
-                query: String::new(),
-                selected: 0,
-            });
+            self.open_suggest(SuggestKind::Command, String::new());
             return None;
         }
-        if self.palette.is_some() {
-            return self.palette_key(key);
+        if self.suggest.is_some() {
+            return self.suggest_key(key);
         }
         if self.key_override("clear_input", key)
             || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u'))
@@ -1504,6 +1667,16 @@ impl Screen {
             }
             KeyCode::Backspace => {
                 self.input.pop();
+            }
+            KeyCode::Char('@') if self.input.is_empty() => {
+                self.input.push('@');
+                self.open_suggest(SuggestKind::Mention, String::new());
+                return None;
+            }
+            KeyCode::Char('/') if self.input.is_empty() => {
+                self.input.push('/');
+                self.open_suggest(SuggestKind::Command, String::new());
+                return None;
             }
             KeyCode::Char(c) if self.input.chars().count() < 4_000 => self.input.push(c),
             _ => {}
@@ -2776,6 +2949,12 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
 
     // Hitung pembagian: badan composer mengikuti tinggi isi (3..12 baris).
     let composer_total = screen.composer_height().clamp(3, 12);
+    // Dropdown saran: 4..10 baris tepat di bawah composer, di atas footer.
+    let suggest_height = screen
+        .suggest
+        .as_ref()
+        .map(|s| (s.items.len() as u16 + 2).clamp(4, 10))
+        .unwrap_or(0);
 
     let chunks = Layout::vertical([
         Constraint::Length(1),
@@ -2783,6 +2962,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
         Constraint::Length(1),
         Constraint::Length(composer_total.saturating_sub(2)),
         Constraint::Length(1),
+        Constraint::Length(suggest_height),
         Constraint::Length(1),
     ])
     .split(area);
@@ -2791,7 +2971,8 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
     let c_top = chunks[2];
     let c_body = chunks[3];
     let c_bottom = chunks[4];
-    let footer = chunks[5];
+    let suggest_area = chunks[5];
+    let footer = chunks[6];
 
     // Header: status line + indikator keadaan (semua data nyata dari state).
     let (state_label, state_color) = if screen.pending.is_some() {
@@ -3038,27 +3219,46 @@ fn draw(frame: &mut ratatui::Frame<'_>, screen: &mut Screen) {
         frame.render_widget(kiri, kolom[0]);
         frame.render_widget(kanan, kolom[1]);
     }
-    if let Some(palette) = screen.palette.as_ref() {
-        let items = screen.palette_items();
-        let height = (items.len() as u16 + 3).clamp(4, 18);
-        let area = centered_area(frame.area(), 72, height);
-        let mut text = format!("> {}\n", palette.query);
-        for (index, spec) in items.iter().enumerate() {
-            let mark = if index == palette.selected { ">" } else { " " };
-            text.push_str(&format!(
-                "{mark} {:<14} {}\n",
-                spec.display(),
-                spec.description
-            ));
-        }
-        frame.render_widget(Clear, area);
-        frame.render_widget(
-            Paragraph::new(text).block(
-                Block::bordered()
-                    .title(" ╭─ Slash commands (Ctrl+K) ")
-                    .border_style(Style::default().fg(screen.accent)),
+    // Dropdown saran (/ commands + skills, @ file/folder) tepat di bawah composer.
+    if let Some(suggest) = screen.suggest.as_ref() {
+        let title = if suggest.kind == SuggestKind::Mention {
+            " ╭─ @ Sisipkan path "
+        } else {
+            " ╭─ / Command & Skills "
+        };
+        let items = screen.suggest_items();
+        let mut lines: Vec<Line<'static>> = Vec::new();
+        lines.push(Line::from(vec![
+            Span::styled("> ", Style::default().fg(p.primary)),
+            Span::styled(
+                format!("{}  {} entri", suggest.query, items.len()),
+                Style::default().fg(p.on_variant),
             ),
-            area,
+        ]));
+        for (index, item) in items.iter().enumerate() {
+            let active = index == suggest.selected;
+            let mark = if active { "▌" } else { " " };
+            let style = if active {
+                Style::default().fg(p.on_surface).bg(p.high)
+            } else {
+                Style::default().fg(p.on_variant)
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{mark} "), Style::default().fg(p.primary)),
+                Span::styled(format!("{:<24}", item.label), style),
+                Span::styled(
+                    item.detail.chars().take(60).collect::<String>(),
+                    Style::default().fg(p.outline),
+                ),
+            ]));
+        }
+        frame.render_widget(
+            Paragraph::new(lines).block(
+                Block::bordered()
+                    .title(title)
+                    .border_style(Style::default().fg(p.primary)),
+            ),
+            suggest_area,
         );
     }
     if let Some(picker) = screen.picker.as_ref() {
@@ -4732,18 +4932,11 @@ provider "uji-cat2" {
     #[test]
     fn palette_items_filter_dan_escape() {
         let mut screen = screen();
-        screen.palette = Some(Palette {
-            query: "title".to_string(),
-            selected: 0,
-        });
-        let items = screen.palette_items();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].name, "title");
-        screen.palette = Some(Palette {
-            query: "zzz".to_string(),
-            selected: 0,
-        });
-        assert!(screen.palette_items().is_empty());
+        screen.suggest = Some(Suggest::command("title".to_string()));
+        let items = screen.suggest_items();
+        assert!(items.iter().any(|item| item.label == "/title"));
+        screen.suggest = Some(Suggest::command("zzz".to_string()));
+        assert!(screen.suggest_items().is_empty());
     }
 
     #[test]
@@ -4751,7 +4944,7 @@ provider "uji-cat2" {
         let mut screen = screen();
         let (tx, _rx) = unbounded_channel::<Command>();
         assert!(screen.handle_key(ctrl('k'), &tx).is_none());
-        assert!(screen.palette.is_some(), "palet terbuka");
+        assert!(screen.suggest.is_some(), "dropdown terbuka");
         for ch in "comp".chars() {
             assert!(screen.handle_key(key(KeyCode::Char(ch)), &tx).is_none());
         }
@@ -4759,7 +4952,10 @@ provider "uji-cat2" {
             Some(Action::Submit(text)) => assert_eq!(text, "/compact"),
             other => panic!("harus menjalankan /compact: {other:?}"),
         }
-        assert!(screen.palette.is_none(), "palet tertutup setelah dipilih");
+        assert!(
+            screen.suggest.is_none(),
+            "dropdown tertutup setelah dipilih"
+        );
     }
 
     #[test]
@@ -4775,7 +4971,7 @@ provider "uji-cat2" {
             screen.input, "/title ",
             "command berargumen mengisi composer"
         );
-        assert!(screen.palette.is_none());
+        assert!(screen.suggest.is_none());
     }
 
     #[test]
@@ -4783,10 +4979,52 @@ provider "uji-cat2" {
         let mut screen = screen();
         let (tx, _rx) = unbounded_channel::<Command>();
         assert!(screen.handle_key(ctrl('k'), &tx).is_none());
-        assert!(screen.palette.is_some());
+        assert!(screen.suggest.is_some());
         assert!(screen.handle_key(key(KeyCode::Esc), &tx).is_none());
-        assert!(screen.palette.is_none());
+        assert!(screen.suggest.is_none());
         assert!(screen.input.is_empty(), "escape tidak menulis ke composer");
+    }
+
+    #[test]
+    fn dropdown_command_menampilkan_skill_terpasang() {
+        // Buat skill sementara di cwd relatif agar `skills_tersedia()` menemukannya.
+        let root = std::env::temp_dir().join("maicli-skills-root");
+        let dir = root.join("skill-uji");
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join("SKILL.md"), "description: skill uji dropdown\n");
+        let collected = tui_tools::skills::temukan(&root);
+        assert_eq!(collected.len(), 1, "skill harus terbaca");
+        assert_eq!(collected[0].nama, "skill-uji");
+        assert_eq!(collected[0].deskripsi, "skill uji dropdown");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn mention_at_membuka_dropdown_dan_menyisipkan_path() {
+        let mut screen = screen();
+        let (tx, _rx) = unbounded_channel::<Command>();
+        assert!(screen.handle_key(key(KeyCode::Char('@')), &tx).is_none());
+        assert_eq!(screen.input, "@", "@ masuk ke composer");
+        assert!(screen.suggest.is_some(), "dropdown mention terbuka");
+        assert_eq!(
+            screen.suggest.as_ref().map(|s| s.kind),
+            Some(SuggestKind::Mention)
+        );
+        // Esc menutup tanpa mengubah composer.
+        assert!(screen.handle_key(key(KeyCode::Esc), &tx).is_none());
+        assert!(screen.suggest.is_none());
+        assert_eq!(screen.input, "@");
+    }
+
+    #[test]
+    fn dropdown_slash_menampilkan_label_command() {
+        let mut screen = screen();
+        screen.open_suggest(SuggestKind::Command, "compact".to_string());
+        let items = screen.suggest_items();
+        assert!(
+            items.iter().any(|item| item.label == "/compact"),
+            "label command memakai nama: {items:?}"
+        );
     }
 
     #[test]

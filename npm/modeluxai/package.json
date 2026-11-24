@@ -1,6 +1,6 @@
 {
   "name": "@modeluxai/cli",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "ModeluXAI maicli \u2014 satu bundle CLI + TUI (Rust). Instal: npm install -g @modeluxai/cli",
   "license": "MIT",
   "homepage": "https://github.com/ModelUXAI/maicli",
