@@ -15,6 +15,12 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
   Amandemen RENCANA `A-2026-11-24` mencatat perubahan L-1/O-7/O-8.
 
 ### Fixed
+- **Bundle GUI CI ditunda (2026-11-24)**: job `gui` di `release.yml` dihapus setelah
+  tiga percobaan gagal: Linux panic di Tauri CLI `app_paths.rs:133`, Windows
+  menolak argumen `--bundles deb`, dan runner macOS dibatalkan (0 langkah).
+  GUI tetap tersedia sebagai source + binary; artefak bundling yang berhasil
+  dibangun lokal (.deb + AppImage) diunggah manual ke Release. `.exe`/`.dmg`
+  **belum terbit** dan tidak diklaim selesai.
 - **Portabilitas & QA GUI**: `tauri-gui-xvfb-qa` — bukti screenshot nyata dari
   `tauri build --no-bundle` di Xvfb (`/tmp/maicli-gui.png`), bukan `cargo build`.
   Keluarga Tauri di-pin (2.11.6 / macros 2.6.3 / utils 2.9.3) sesuai skill

@@ -183,63 +183,9 @@ jobs:
           if-no-files-found: error
 
 
-  gui:
-    name: gui (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            bundle: deb appimage
-            arsip: maicli-gui-linux
-          - os: windows-latest
-            bundle: nsis msi
-            arsip: maicli-gui-windows
-          - os: macos-14
-            bundle: dmg app
-            arsip: maicli-gui-macos
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref_name }}
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: pasang dependensi frontend
-        working-directory: frontend
-        run: npm ci
-      - name: pasang dependensi sistem (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: bangun GUI
-        working-directory: gui
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: npm --prefix ../frontend run tauri build -- --bundles ${{ matrix.bundle }}
-      - name: kumpulkan artefak GUI
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist-gui
-          find target/release/bundle -type f \
-            \( -name '*.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.dmg' \) \
-            -exec cp {} dist-gui/ \;
-          ls -la dist-gui
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.arsip }}
-          path: dist-gui/*
-          if-no-files-found: warn
-
   release:
     name: release
-    needs: [build, gui]
+    needs: build
     # GitHub bisa membatalkan job macOS karena batas runner akun. Tetap rilis
     # artefak target yang berhasil (minimal satu) daripada melewati rilis
     # seluruhnya; `if-no-files-found: error` di upload menjamin tiap job sukses
