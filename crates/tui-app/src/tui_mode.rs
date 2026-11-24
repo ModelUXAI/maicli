@@ -891,6 +891,16 @@ impl Screen {
                 let suggest = self.suggest.as_ref()?;
                 let picked = suggest.items.get(suggest.selected).cloned();
                 self.suggest = None;
+                // Bila pengguna mengetik perintah penuh (mis. `/provider`),
+                // jalankan apa yang diketik, bukan entri yang disorot.
+                let typed = self.input.trim();
+                if typed.starts_with('/') && tui_core::commands::find_command(&typed[1..]).is_some()
+                {
+                    let text = typed.to_string();
+                    self.input.clear();
+                    self.history.push(text.clone());
+                    return Some(Action::Submit(text));
+                }
                 let item = picked?;
                 return match kind {
                     SuggestKind::Mention => {
@@ -922,6 +932,9 @@ impl Screen {
                 suggest.query.push(ch);
                 suggest.selected = 0;
                 suggest.refresh();
+                if self.input.chars().count() < 4_000 {
+                    self.input.push(ch);
+                }
                 return None;
             }
             _ => {}
@@ -3787,7 +3800,13 @@ pub async fn run(mut boot: Boot) -> Result<(), MxError> {
                     screen.push_line("[antrean] menunggu turn selesai (lihat /queue)".to_string());
                     continue;
                 }
-                screen.busy = true;
+                // Perintah lokal tidak menjalankan turn agen. Worker akan mengirim
+                // `LocalCommandDone` bila command benar-benar ditangani lokal;
+                // UI tidak boleh mengira sesi RUNNING hanya karena perintah diketik.
+                // Beberapa perintah (/commit, /retry) memang menjalankan turn;
+                // sisanya ditangani worker lokal tanpa agen.
+                let starts_turn = text.starts_with("/commit") || text.starts_with("/retry");
+                screen.busy = !text.starts_with('/') || starts_turn;
                 let _ = commands.send(Command::Prompt(text));
             }
             Some(Action::Abort) => {
@@ -5027,6 +5046,24 @@ provider "uji-cat2" {
         assert!(screen.handle_key(key(KeyCode::Esc), &tx).is_none());
         assert!(screen.suggest.is_none());
         assert!(screen.input.is_empty(), "escape tidak menulis ke composer");
+    }
+
+    #[test]
+    fn mengetik_command_lokal_tidak_menandai_sesi_running() {
+        let mut layar = screen();
+        let (tx, _rx) = unbounded_channel::<Command>();
+        // Simulasikan `/provider` diketik dengan dropdown terbuka.
+        layar.handle_key(key(KeyCode::Char('/')), &tx);
+        for ch in "provider".chars() {
+            let _ = layar.handle_key(key(KeyCode::Char(ch)), &tx);
+        }
+        assert_eq!(layar.input, "/provider");
+        // UI tidak pernah menyetel busy saat perintah lokal diketik.
+        assert!(!layar.busy, "command lokal tidak boleh RUNNING");
+        match layar.handle_key(key(KeyCode::Enter), &tx) {
+            Some(Action::Submit(text)) => assert_eq!(text, "/provider"),
+            other => panic!("harus submit /provider: {other:?}"),
+        }
     }
 
     #[test]

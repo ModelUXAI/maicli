@@ -1,8 +1,16 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.5] - 2026-11-25`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.4.6] - 2026-11-25`.
 
-## [0.4.5] - 2026-11-25
+## [0.4.6] - 2026-11-25
+
+### Fixed
+- Mengetik perintah lokal seperti `/provider` tidak lagi menandai sesi sebagai
+  RUNNING. Sebelumnya dropdown menyimpan ketikan di query, Enter mengirim
+  command lokal, tetapi UI sudah lebih dulu menyetel `busy = true`.
+- Ketikan calon command penuh (mis. `/provider`) kini dijalankan apa adanya bila
+  namanya ada di registry, bukan entri yang sedang disorot dropdown.
+
 
 ### Fixed
 - Dropdown saran kini ikut bergulir saat `↑`/`↓`/`Tab`: ditambahkan jendela
