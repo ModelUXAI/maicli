@@ -1,6 +1,6 @@
 {
   "name": "maicli-desktop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Host Electron untuk frontend maicli (React + TypeScript)",
   "homepage": "https://github.com/ModelUXAI/maicli",
