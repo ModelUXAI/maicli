@@ -1,12 +1,13 @@
 name: Release-plz
 
-# Dua fase:
-#   1. `release` — bila PR rilis sudah di-merge, buat tag `vX.Y.Z` + GitHub Release.
-#   2. `release-pr` — buka/perbarui PR rilis berikutnya dari Conventional Commits.
-#   3. `binaries` — panggil workflow release.yml untuk tag baru (GITHUB_TOKEN tidak
-#      memicu `push` tag, jadi pemanggilan eksplisit ini yang membangun biner).
+# Alur rilis MANUAL via tag immutable:
+#   1. bump versi + heading CHANGELOG, commit, push `main`;
+#   2. buat tag `vX.Y.Z` lalu push tag — ini yang memicu `release.yml`
+#      membangun biner + GUI dan mengunggahnya ke GitHub Release.
 #
-# Tidak butuh PAT: reusable workflow dipanggil langsung dari workflow ini.
+# Job `release-pr` sengaja tidak ada: repo melarang GitHub Actions membuat PR
+# (403), dan release-plz memakai `GITHUB_TOKEN` secara default. Rilis tidak
+# bergantung pada PR; tag manual sudah cukup dan tetap immutable.
 
 on:
   push:
@@ -15,7 +16,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: release-plz-${{ github.ref }}
@@ -58,24 +58,6 @@ jobs:
           else
             echo "tidak ada tag baru (tidak ada perubahan rilis)"
           fi
-
-  release-pr:
-    name: release-pr
-    needs: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: release-plz release-pr
-        # Jangan set `env.GITHUB_TOKEN`: itu menimpa token bawaan action dengan
-        # token Actions yang dilarang repo membuat PR (403). Biarkan action
-        # memakai token defaultnya; izin `pull-requests: write` sudah diberikan.
-        uses: release-plz/action@v0.5
-        with:
-          command: release-pr
 
   binaries:
     name: binaries
