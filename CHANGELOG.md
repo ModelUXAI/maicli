@@ -1,6 +1,6 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [Unreleased]`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.2.0] - 2026-11-24`.
 
 ## [Unreleased]
 

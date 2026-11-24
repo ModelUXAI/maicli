@@ -36,3 +36,20 @@
   deploy key, atau PAT).
 - Aktifkan release-plz hanya setelah tag baseline ada di remote.
 - Biarkan release-plz menulis `[0.1.0]` pertama; jangan isi manual.
+
+## Aturan tag (diperbarui 2026-11-24)
+
+- **Tag bersifat immutable.** Dilarang force-update tag yang sudah ada.
+  Setiap rilis membuat tag baru `vX.Y.Z` yang menunjuk commit rilis tersebut.
+- **Versi naik tiap rilis.** Perubahan yang dirilis memakai semver:
+  `feat` → MINOR (`0.1.0` → `0.2.0`), `fix` → PATCH, breaking → MAJOR.
+- **Status saat ini:** rilis GUI + bundling CI dirilis sebagai **v0.2.0**
+  (commit `536c47f` dan setelahnya); `v0.1.0` adalah baseline CLI dan
+  tidak lagi dipindahkan.
+- `release-plz` hanya akan membuat PR rilis otomatis bila commit memakai
+  Conventional Commits (`feat:`, `fix:`). Commit berformat `[vX.Y.Z] …`
+  tidak dikenali sebagai perubahan versi, sehingga versi harus di-bump manual
+  sampai konvensi commit dipakai konsisten.
+- Semua marker versi mengikuti satu angka: `Cargo.toml`, `gui/Cargo.toml`,
+  `frontend/package.json`, `gui/tauri.conf.json`, `npm/modeluxai/package.json`,
+  dan `sdk/typescript/package.json`.

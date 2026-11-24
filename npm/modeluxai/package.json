@@ -1,7 +1,7 @@
 {
   "name": "@modeluxai/cli",
-  "version": "0.1.0",
-  "description": "ModeluXAI maicli \u2014 agen AI terminal-first (biner Rust prebuilt). Instal: npm install -g @modeluxai/cli",
+  "version": "0.2.0",
+  "description": "ModeluXAI maicli — agen AI terminal-first (biner Rust prebuilt). Instal: npm install -g @modeluxai/cli",
   "license": "MIT",
   "homepage": "https://github.com/ModelUXAI/maicli",
   "repository": {

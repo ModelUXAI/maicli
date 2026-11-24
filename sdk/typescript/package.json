@@ -1,10 +1,12 @@
 {
   "name": "maicli-rpc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Klien RPC maicli v1 (JSONL stdin/stdout), tanpa dependensi",
   "type": "module",
   "main": "src/client.mjs",
   "types": "src/client.d.ts",
-  "scripts": { "test": "node --test test/*.test.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
   "license": "MIT"
 }
