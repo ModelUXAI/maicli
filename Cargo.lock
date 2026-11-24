@@ -4184,7 +4184,7 @@ version = "0.4.6"
 dependencies = [
  "arboard",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "clap",
  "crossterm",
  "directories",
@@ -4293,7 +4293,7 @@ name = "tui-mcp"
 version = "0.4.6"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "reqwest",
  "serde",
@@ -4399,7 +4399,7 @@ dependencies = [
 name = "tui-wire"
 version = "0.4.6"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

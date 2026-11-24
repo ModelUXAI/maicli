@@ -42,7 +42,7 @@ tui-core = { path = "crates/tui-core" }
 tui-sdk = { path = "crates/tui-sdk" }
 
 
-base64 = "0.22"
+base64 = "0.23"
 bytes = "1"
 async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
