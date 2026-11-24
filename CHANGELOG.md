@@ -1,8 +1,11 @@
 # Changelog
 
-Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.2.0] - 2026-11-24`.
+Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.2.1] - 2026-11-24`.
 
 ## [Unreleased]
+
+### Fixed
+- **Rilis lengkap (2026-11-24)**: langkah `cargo test` dihapus dari workflow rilis karena CI sudah menggating commit yang sama; menjalankan ulang di saat rilis menyebabkan artefak linux-x64 hilang akibat test flaky.
 
 ### Added
 - **GUI desktop maicli (2026-11-24)**: frontend Vite + React + TypeScript
