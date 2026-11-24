@@ -220,7 +220,17 @@ jobs:
         working-directory: gui
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: npm --prefix ../frontend run tauri build
+        # Panggil CLI Tauri langsung DARI folder gui/. Memakai
+        # `npm --prefix ../frontend run tauri` membuat npm menjalankan script
+        # dari folder frontend/, sehingga Tauri tidak menemukan tauri.conf.json
+        # dan panic di app_paths.rs:133.
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ../frontend/node_modules/.bin/tauri.cmd build
+          else
+            ../frontend/node_modules/.bin/tauri build
+          fi
       - name: kumpulkan artefak GUI
         shell: bash
         run: |
