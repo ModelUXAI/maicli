@@ -240,7 +240,11 @@ jobs:
 
       - name: pasang dependensi Electron
         working-directory: desktop
-        run: npm ci
+        shell: bash
+        # `npm ci` melewati postinstall electron-winstaller pada runner Windows
+        # (pemilihan arsitektur 7z), yang dibutuhkan electron-builder.
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then npm install; else npm ci; fi
       - name: bangun installer Electron
         working-directory: desktop
         run: npm run dist

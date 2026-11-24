@@ -1,6 +1,6 @@
 {
   "name": "maicli-rpc",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Klien RPC maicli v1 (JSONL stdin/stdout), tanpa dependensi",
   "type": "module",
   "main": "src/client.mjs",
