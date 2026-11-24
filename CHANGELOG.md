@@ -4,6 +4,40 @@ Format mengikuti Keep-a-Changelog. Entri baru selalu di bawah `## [0.2.1] - 2026
 
 ## [Unreleased]
 
+### Changed
+- **Redesain frontend GUI mengikuti 18 layar design reference (2026-11-24)**:
+  `frontend/` ditulis ulang sebagai sistem visual berbasis token Tailwind 4
+  (`@theme` dari `design-reference/*/code.html`: canvas `#0b141c`, surface
+  `#060f16`–`#2d363e`, primary/secondary/tertiary/error, radius 2/4/8/12,
+  spacing 4–24, JetBrains Mono lokal + Material Symbols lokal, tanpa gradient
+  dan tanpa shadow lembut). Satu shell untuk semua layar (rail 256px, header
+  48px, footer 40px) menggantikan grid tiga kolom tetap 300/1fr/320. Komponen
+  baru: composer tiga band ASCII, HUD meter (bar + ASCII `█░`), kartu tool
+  sub-shell, diff dua gutter nomor, modal approval Y/N/S, slash palette, modal
+  model/settings/shortcuts, dan welcome dengan telemetry nyata.
+- **Klien RPC bertipe (`src/rpc/{frames,transport,client}.ts`)**: korelasi
+  request/balasan lewat `id`, reassembly `rpc_chunk` v2 (batas 64 MiB,
+  `E_CHUNK_INVALID`/`E_CHUNK_TOO_LARGE`), negosiasi protokol v2 sekali saat
+  `ready`, dan `command_output` tanpa id dikaitkan ke request `command` yang
+  menunggu `ack`. `src/rpc.ts` lama dihapus; `list_sessions` (tidak ada di
+  server) dihapus dari klien.
+- **Balasan prompt simulasi dihapus**: `prompt` benar-benar dikirim lewat RPC.
+  Daftar model diambil dari `command_output` perintah `/model`, daftar perintah
+  slash dari registry Rust (`COMMANDS`), dan field yang tidak tersedia di
+  protokol dirender `—` dengan alasannya, bukan angka rekaan.
+
+### Added
+- **Test frontend (49 test, Vitest + jsdom)**: parser frame dan chunking,
+  reducer store (penggabungan `text_delta`, pasangan `tool_start`/`tool_end`,
+  siklus approval, penurunan `busy`), composer (Enter/Shift+Enter/busy),
+  matriks approval Y/N/S + Esc + fokus awal, dan parser diff yang toleran
+  terhadap input cacat. `vite.config.ts` memuat plugin `@tailwindcss/vite` dan
+  blok `test` (environment jsdom, setup jest-dom).
+- **Mode preview DEV** (`?preview=1`, `?preview=welcome|approval|ask`): memutar
+  frame hasil konversi transkrip golden `tests/golden/*.txt` lewat dynamic
+  import, sehingga verifikasi visual berjalan tanpa API key dan tanpa masuk
+  bundle produksi.
+
 ### Fixed
 - **Rilis lengkap (2026-11-24)**: langkah `cargo test` dihapus dari workflow rilis karena CI sudah menggating commit yang sama; menjalankan ulang di saat rilis menyebabkan artefak linux-x64 hilang akibat test flaky.
 
